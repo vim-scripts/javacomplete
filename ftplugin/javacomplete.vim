@@ -1,13 +1,14 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.71
+" Version:	0.72
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-01-28
+" Last Change:	2007-01-31
 " Changelog:
-" 1. v0.50 2007-01-21	Use java and Reflection.class directly.
-" 2. v0.60 2007-01-25	Design TClassInfo, etc.
-" 3. v0.70 2007-01-27	Complete the reflection part.
-" 4. v0.71 2007-01-28	Add Basic support for class in current folder.
+" v0.50 2007-01-21	Use java and Reflection.class directly.
+" v0.60 2007-01-25	Design TClassInfo, etc.
+" v0.70 2007-01-27	Complete the reflection part.
+" v0.71 2007-01-28	Add Basic support for class in current folder.
+" v0.72 2007-01-31	Handle nested expression
 
 " Installation:								{{{1
 " 1. Place javacomplete.vim in the autoload directory, e.g.  $VIM/vimfiles/autoload
@@ -56,6 +57,14 @@
 "	- compound_expr.method().|
 "	- compound_expr.method(|)
 "	- compound_expr.var.ab|
+"	e.g.
+"	- "java.lang	. System.in .|"
+"	- "java.lang.System.getenv().|"
+"
+"   (6). Nested expression:
+"	- "System.out.println( str.| )"
+"	- "System.out.println(str.charAt(| )"
+"	- "for (int i = 0; i < str.|; i++)"
 
 " Implementation note:							{{{1
 " Read class information in the following order:
@@ -258,12 +267,11 @@ function! javacomplete#Complete(findstart, base)
 	  endif
 	endif
       end
-      "let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
+      let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
       return start - strlen(b:incomplete)
     endif
 
-    " TODO: To extract a clean expr by calling Parse()?
-    "let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
+    let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
 
     let end_char = statement[strlen(statement)-1]
     if end_char == '.'
@@ -497,7 +505,7 @@ fu! s:ExtractCleanExpr(expr)
   let cmd = a:expr
   let pos = strlen(cmd)-1 
   let char = cmd[pos]
-  while (pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\] \t]')
+  while (pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\] \t\r\n]')
     if char == ')'
       let pos = s:GetMatchedIndex(cmd, pos)
     elseif char == ']'
