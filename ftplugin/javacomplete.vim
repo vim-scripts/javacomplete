@@ -1,29 +1,46 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.72
+" Version:	0.73
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-01-31
+" Last Change:	2007-02-01
 " Changelog:
 " v0.50 2007-01-21	Use java and Reflection.class directly.
 " v0.60 2007-01-25	Design TClassInfo, etc.
 " v0.70 2007-01-27	Complete the reflection part.
 " v0.71 2007-01-28	Add Basic support for class in current folder.
-" v0.72 2007-01-31	Handle nested expression
+" v0.72 2007-01-31	Handle nested expression.
+" v0.73 2007-02-01
+" 	Fix bug that CLASSPATH not used when b:classpath or g:java_classpath not set.
+" 	Fix bug that call filter() without making a copy for incomplete.
+"	Improve recognition of declaration of this class
 
 " Installation:								{{{1
 " 1. Place javacomplete.vim in the autoload directory, e.g.  $VIM/vimfiles/autoload
 " 2. Place classes of Reflection into classpath.
 "    You also can use jdk1.4 (and above) to compile Reflection.java by yourself.
 "    Currently, You need a jre of v1.4. I will make it portable to be compiled jdk1.2.
-" 3. Add more jar or class directories to classpath, if you like. e.g.
+" 3. Set omnifunc if necessary. e.g.
+" 	:set omnifunc=javacomplete#Complete
+"    You can do it in script like ftplugin/java_fc.vim.
+" 4. Add more jar or class directories to classpath, if you like. e.g.
 "	let g:java_classpath = '.;C:\java\lib\servlet.jar;C:\java\classes;C:\webapp\WEB-INF\lib\foo.jar;C:\webapp\WEB-INF\classes'
 "    or in unix/linux
 "	let g:java_classpath = '.:~/java/lib/servlet.jar:~/java/classes:~/java/webapp/WEB-INF/lib/foo.jar:~/java/webapp/WEB-INF/classes'
+"   Besides g:java_classpath, you can set local b:classpath and it is preferred.
 "
 " Usage:								{{{1
+" Assure that Reflection.class be in the class search path: b:classpath,
+" g:java_classpath, $CLASSPATH.
 " 1. Open a java file or a jsp file, press <C-X><C-O> in some places.
 "
 "    
+" FAQ:									{{{1
+" 1. When you meets the following problem:
+" 	omni-completion error: Exception in thread "main" 
+"	java.lang.NoClassDefFoundError: Reflection
+" You can check $CLASSPATH, b:classpath and g:java_classpath. Assure that
+" Reflection.class be in the classpath.
+" 	
 "
 " Requirements:								{{{1
 " 1. input context:	('|' indicates cursor position)
@@ -176,6 +193,11 @@ let s:cache = {}		" class FQN -> member list, e.g. {'java.lang.StringBuffer': cl
 
 " Complete function							{{{1
 function! javacomplete#Complete(findstart, base)
+  if s:GetClassPath() =~ '^\s*$'
+    echo "Please set $CLASSPATH, g:java_classpath or b:classpath firstly. And assure that Reflection.class be in class search path."
+    return -1
+  endif
+
   if a:findstart
     let b:performance = ''
     let b:et_whole = reltime()
@@ -288,7 +310,7 @@ function! javacomplete#Complete(findstart, base)
 
     else
       let b:context_type = s:CONTEXT_OTHER
-      echoerr 'Cannot correctly parse ' . statement . ''
+      echo 'Cannot correctly parse ' . statement . ''
     end
 
     return start - strlen(b:incomplete)
@@ -302,18 +324,20 @@ function! javacomplete#Complete(findstart, base)
 
 
   let result = []
-  if b:context_type == s:CONTEXT_AFTER_DOT || b:context_type == s:CONTEXT_INCOMPLETE_WORD
-    let result = s:CompleteAfterDot()
-  elseif b:context_type == s:CONTEXT_IMPORT
-    let result = s:GetPackageContent(b:dotexpr)
-  elseif b:context_type == s:CONTEXT_METHOD_PARAM
-    if b:incomplete == 'new'
-      let fqn = s:GetFQN(b:dotexpr)
-      if (fqn != '')
-	let result = s:GetConstructorList(fqn, b:dotexpr)
-      endif
-    else
+  if b:dotexpr !~ '^\s*$'
+    if b:context_type == s:CONTEXT_AFTER_DOT || b:context_type == s:CONTEXT_INCOMPLETE_WORD
       let result = s:CompleteAfterDot()
+    elseif b:context_type == s:CONTEXT_IMPORT
+      let result = s:GetPackageContent(b:dotexpr)
+    elseif b:context_type == s:CONTEXT_METHOD_PARAM
+      if b:incomplete == 'new'
+	let fqn = s:GetFQN(b:dotexpr)
+	if (fqn != '')
+	  let result = s:GetConstructorList(fqn, b:dotexpr)
+	endif
+      else
+	let result = s:CompleteAfterDot()
+      endif
     endif
   endif
 
@@ -321,7 +345,7 @@ function! javacomplete#Complete(findstart, base)
   if len(result) > 0
     " filter according to b:incomplete
     if len(b:incomplete) > 0 && b:incomplete != 'new'
-      let result = filter(result, "type(v:val) == type('') ? v:val =~ '^" . b:incomplete . "' : v:val['word'] =~ '^" . b:incomplete . "'")
+      let result = filter(copy(result), "type(v:val) == type('') ? v:val =~ '^" . b:incomplete . "' : v:val['word'] =~ '^" . b:incomplete . "'")
     endif
 
     let b:performance = reltimestr(reltime(b:et_whole)) . "s" . b:performance
@@ -502,10 +526,11 @@ endfunction
 
 " Extract a clean expr, removing some non-necessary characters. 
 fu! s:ExtractCleanExpr(expr)
-  let cmd = a:expr
+  let cmd = substitute(a:expr, '[ \t\r\n]*\.', '.', 'g')
+  let cmd = substitute(cmd, '\.[ \t\r\n]*', '.', 'g')
   let pos = strlen(cmd)-1 
   let char = cmd[pos]
-  while (pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\] \t\r\n]')
+  while (pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\]]')
     if char == ')'
       let pos = s:GetMatchedIndex(cmd, pos)
     elseif char == ']'
@@ -616,11 +641,15 @@ endfunction
 "   [2	implements | extends ]
 "   [3	parent list ]
 function! s:GetThisClassDeclaration()
-  "echoerr 'GetThisClassDeclaration'
   let lnum_old = line('.')
   let col_old = col('.')
 
-  call search('\(\<class\>\|\<interface\>\)', 'b')
+  while (1)
+    call search('\(\<class\>\|\<interface\>\)\s\+', 'bW')
+    if synIDattr(synID(line("."), col(".") - 1, 1), "name") !~ 'comment'
+      break
+    end
+  endwhile
 
   " join lines till to '{'
   let str = ''
@@ -632,9 +661,14 @@ function! s:GetThisClassDeclaration()
     let lnum = lnum + 1
   endwhile
 
-  exe "let list = " . substitute(getline('.'), '.*\(\<class\>\|\<interface\>\)\s\+\([a-zA-Z0-9_]\+\)\s\+\(\(implements\|extends\)\s\+\([^{]\+\)\)\?\s*{.*', '["\1", "\2", "\4", "\5"]', '')
-
+  
+  let declaration = substitute(getline('.'), '.*\(\<class\>\|\<interface\>\)\s\+\([a-zA-Z0-9_]\+\)\s\+\(\(implements\|extends\)\s\+\([^{]\+\)\)\?\s*{.*', '["\1", "\2", "\4", "\5"]', '')
   call cursor(lnum_old, col_old)
+  if declaration !~ '^['
+    echoerr 'Some error occurs when recognizing this class.'
+    return ['', '']
+  endif
+  exe "let list = " . declaration
   return list
 endfunction
 
@@ -730,19 +764,23 @@ function! s:GetNextSubexprType(fqn, expr)
 
   let resulttype = ''
   if isMethod
-    for method in classinfo['methods']
-      if method['n'] == next_subexpr
-	" get the class name of return type 
-	let resulttype = method['r']
-      endif
-    endfor
+    if has_key(classinfo, 'methods')
+      for method in classinfo['methods']
+	if method['n'] == next_subexpr
+	  " get the class name of return type 
+	  let resulttype = method['r']
+	endif
+      endfor
+    endif
   else
-    for field in classinfo['fields']
-      if field['n'] == next_subexpr
-	" get the class name of field 
-	let resulttype = field['t']
-      endif
-    endfor
+    if has_key(classinfo, 'fields')
+      for field in classinfo['fields']
+	if field['n'] == next_subexpr
+	  " get the class name of field 
+	  let resulttype = field['t']
+	endif
+      endfor
+    endif
   endif
   call s:WatchVariant('resulttype: ' . resulttype)
 
@@ -837,12 +875,13 @@ endfunction
 
 
 function! s:GetClassPath()
-  if exists('b:classpath')
+  if exists('b:classpath') && b:classpath !~ '^\s*$'
     return b:classpath
   endif
-  if exists('g:java_classpath')
+  if exists('g:java_classpath') && g:java_classpath !~ '^\s*$'
     return g:java_classpath
   endif
+  return $CLASSPATH
 endfunction
 
 fu! s:IsStatic(modifier)
@@ -1068,23 +1107,27 @@ fu! s:DoGetMemberList(class, static)
   let ci = s:DoGetClassInfo(a:class, '-C')
   let fieldlist = []
   let sfieldlist = []
-  for field in ci['fields']
-    if s:IsStatic(field['m'])
-      call add(sfieldlist, field)
-    elseif !a:static
-      call add(fieldlist, field)
-    endif
-  endfor
+  if has_key(ci, 'fields')
+    for field in ci['fields']
+      if s:IsStatic(field['m'])
+	call add(sfieldlist, field)
+      elseif !a:static
+	call add(fieldlist, field)
+      endif
+    endfor
+  endif
 
   let methodlist = []
   let smethodlist = []
-  for method in ci['methods']
-    if s:IsStatic(method['m'])
-      call add(smethodlist, method)
-    elseif !a:static
-      call add(methodlist, method)
-    endif
-  endfor
+  if has_key(ci, 'methods')
+    for method in ci['methods']
+      if s:IsStatic(method['m'])
+	call add(smethodlist, method)
+      elseif !a:static
+	call add(methodlist, method)
+      endif
+    endfor
+  endif
 
   if !a:static
     let s = s . s:DoGetFieldList(fieldlist)
@@ -1116,13 +1159,15 @@ endfu
 function! s:GetConstructorList(fqn, class)
   let s = '['
   let ci = s:DoGetClassInfo(a:fqn, '-C')
-  for ctor in ci['ctors']
-    let s = s . '{'
-    let s = s . "'word':'" . a:class . "(',"
-    let s = s . "'abbr':'" . ctor['d'] . "',"
-    let s = s . "'dup':'1'"
-    let s = s . '},'
-  endfor
+  if has_key(ci, 'ctors')
+    for ctor in ci['ctors']
+      let s = s . '{'
+      let s = s . "'word':'" . a:class . "(',"
+      let s = s . "'abbr':'" . ctor['d'] . "',"
+      let s = s . "'dup':'1'"
+      let s = s . '},'
+    endfor
+  endif
   let s = s . ']'
 
   let s = substitute(s, 'java\.lang\.', '', 'g')
