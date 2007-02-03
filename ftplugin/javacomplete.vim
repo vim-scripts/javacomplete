@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.73
+" Version:	0.74
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-02-01
+" Last Change:	2007-02-03
 " Changelog:
 " v0.50 2007-01-21	Use java and Reflection.class directly.
 " v0.60 2007-01-25	Design TClassInfo, etc.
@@ -13,16 +13,20 @@
 " 	Fix bug that CLASSPATH not used when b:classpath or g:java_classpath not set.
 " 	Fix bug that call filter() without making a copy for incomplete.
 "	Improve recognition of declaration of this class
+" v0.74 2007-02-03
+" 	Support jre1.2 (and above).
+" 	Support input context like "boolean.class.|"
+" 	Handle java primitive types like 'int'.
 
 " Installation:								{{{1
-" 1. Place javacomplete.vim in the autoload directory, e.g.  $VIM/vimfiles/autoload
+" 1. Place javacomplete.vim in the "autoload" directory, e.g.  $VIM/vimfiles/autoload
 " 2. Place classes of Reflection into classpath.
-"    You also can use jdk1.4 (and above) to compile Reflection.java by yourself.
-"    Currently, You need a jre of v1.4. I will make it portable to be compiled jdk1.2.
-" 3. Set omnifunc if necessary. e.g.
-" 	:set omnifunc=javacomplete#Complete
-"    You can do it in script like ftplugin/java_fc.vim.
-" 4. Add more jar or class directories to classpath, if you like. e.g.
+"    You can also use jdk1.2 (and above) to recompile Reflection.java by yourself.
+"    NOTE: I don't test it on jdk1. Anybody who test it can tell me.
+" 3. Set 'omnifunc' option if necessary. e.g.
+" 	:setlocal omnifunc=javacomplete#Complete
+"    You can do it in a script like ftplugin/java_fc.vim.
+" 4. Add more jars or class directories to classpath, if you like. e.g.
 "	let g:java_classpath = '.;C:\java\lib\servlet.jar;C:\java\classes;C:\webapp\WEB-INF\lib\foo.jar;C:\webapp\WEB-INF\classes'
 "    or in unix/linux
 "	let g:java_classpath = '.:~/java/lib/servlet.jar:~/java/classes:~/java/webapp/WEB-INF/lib/foo.jar:~/java/webapp/WEB-INF/classes'
@@ -32,6 +36,10 @@
 " Assure that Reflection.class be in the class search path: b:classpath,
 " g:java_classpath, $CLASSPATH.
 " 1. Open a java file or a jsp file, press <C-X><C-O> in some places.
+" 
+" Tips:
+" 1. Set b:classpath for specific project setting.
+"    Set g:java_classpath for write snippets containing common jars you used.
 "
 "    
 " FAQ:									{{{1
@@ -70,6 +78,7 @@
 "
 "   The above are in simple expression.
 "   (5). after compound expression:
+"	- boolean.class.|
 "	- compound_expr.var.|
 "	- compound_expr.method().|
 "	- compound_expr.method(|)
@@ -124,6 +133,7 @@ let s:CONTEXT_METHOD_PARAM	= 2
 let s:CONTEXT_IMPORT		= 3
 let s:CONTEXT_INCOMPLETE_WORD	= 4
 let s:CONTEXT_OTHER 		= 0
+
 
 let s:ARRAY_CLASS_INFO = [
 \	{'kind': 'f', 'word': 'equals(', 'abbr' : 'equals()', 'menu' : 'boolean equals(Object)', }, 
@@ -377,6 +387,8 @@ function! s:CompleteAfterDot()
       " array
       if (class[strlen(class)-1] == ']')
 	return s:ARRAY_CLASS_INFO
+      elseif s:IsBuiltinType(class)
+	return []
       " class in current project, including current file or files in current folder
       elseif globpath(expand('%:p:h'), class . '.java') != ''
 	return s:DoGetClassInfoFromTags(class)
@@ -403,6 +415,7 @@ function! s:CompleteAfterDot()
   "
   " an dot separated expression 
   " Assumes in the following order:
+  "	0) "boolean.class.|"	- java.lang.Class
   "	1) "java.lang.String.|"	- A fully qualified class name
   "	
   "	2) "obj.var.|"		- An object's field
@@ -423,6 +436,11 @@ function! s:CompleteAfterDot()
       let expr = 'this.' . expr
     endif
 
+    " 0.
+    if expr =~ '\.\Cclass$'
+      return s:GetMemberList('java.lang.Class')
+    endif
+
     " 1.
     call s:Info('C1. "java.lang.String.|"')
     let fqn = s:GetFQN(expr)
@@ -437,9 +455,16 @@ function! s:CompleteAfterDot()
     call s:Info('C2|3. "obj.var.|", or "sb.append().|"')
     let classname = s:GetDeclaredClassName(first)
     if (classname != '')
+      if s:IsBuiltinType(classname)
+	return []
+      endif
+
       let fqn = s:GetFQN(classname)
       if (fqn != '')
 	let fqn = s:GetNextSubexprType(fqn, strpart(expr, idx_dot+1))
+	if s:IsBuiltinType(fqn)
+	  return []
+	endif
 	if (fqn != '')
 	  return s:GetMemberList(fqn)
 	endif
@@ -451,6 +476,9 @@ function! s:CompleteAfterDot()
     let fqn = s:GetFQN(first)
     if (fqn != '')
       let fqn = s:GetNextSubexprType(fqn, strpart(expr, idx_dot+1))
+      if s:IsBuiltinType(fqn)
+	return []
+      endif
       if (fqn != '')
 	return s:GetMemberList(fqn)
       endif
@@ -471,6 +499,9 @@ function! s:CompleteAfterDot()
     endwhile
     if fqn != ''
       let fqn = s:GetNextSubexprType(fqn, strpart(expr, idx_dot_prev+1))
+      if s:IsBuiltinType(fqn)
+	return []
+      endif
       if (fqn != '')
 	return s:GetMemberList(fqn)
       endif
@@ -564,7 +595,7 @@ function! s:GenerateImports()
       break
     endif
 
-    if synIDattr(synID(line("."), col(".") - 1, 1), "name") =~ 'comment'
+    if synIDattr(synID(line("."), col(".") - 1, 1), "name") =~? 'comment'
       continue
     end
 
@@ -582,12 +613,11 @@ endfunction
 " Return: The declaration of identifier under the cursor
 " Note: The type of a variable must be imported or a fqn.
 function! s:GetVariableDeclaration()
-  "echoerr 'GetVariableDeclaration'
   let lnum_old = line('.')
   let col_old = col('.')
 
   let declaration = ''
-  silent call search('[{;(]', 'b')
+  silent call search('[{};(,]', 'b')
   normal w
   let lnum = line('.')
   let col = col('.')
@@ -595,7 +625,7 @@ function! s:GetVariableDeclaration()
     return declaration
   endif
 
-  silent call search(';')
+  silent call search('[;){]')
   let lnum_end = line('.')
   while (lnum <= lnum_end)
     let declaration = declaration . getline(lnum)
@@ -645,9 +675,11 @@ function! s:GetThisClassDeclaration()
   let col_old = col('.')
 
   while (1)
-    call search('\(\<class\>\|\<interface\>\)\s\+', 'bW')
-    if synIDattr(synID(line("."), col(".") - 1, 1), "name") !~ 'comment'
-      break
+    call search('\(\<class\C\>\|\<interface\C\>\)[ \t\r\n]\+', 'bW')
+    if synIDattr(synID(line("."), col(".") - 1, 1), "name") !~? 'comment'
+      if getline('.')[col('.')-2] !~ '\S'
+	break
+      endif
     end
   endwhile
 
@@ -662,10 +694,10 @@ function! s:GetThisClassDeclaration()
   endwhile
 
   
-  let declaration = substitute(getline('.'), '.*\(\<class\>\|\<interface\>\)\s\+\([a-zA-Z0-9_]\+\)\s\+\(\(implements\|extends\)\s\+\([^{]\+\)\)\?\s*{.*', '["\1", "\2", "\4", "\5"]', '')
+  let declaration = substitute(str, '.*\(\<class\>\|\<interface\>\)\s\+\([a-zA-Z0-9_]\+\)\(\s\+\(implements\|extends\)\s\+\([^{]\+\)\)\?\s*{.*', '["\1", "\2", "\4", "\5"]', '')
   call cursor(lnum_old, col_old)
   if declaration !~ '^['
-    echoerr 'Some error occurs when recognizing this class.'
+    echoerr 'Some error occurs when recognizing this class:' . declaration
     return ['', '']
   endif
   exe "let list = " . declaration
@@ -700,11 +732,12 @@ function! s:GetDeclaredClassName(var)
     let isArrayElement = 1
   endif
 
+
   let ic = &ignorecase
   set noignorecase
 
-  " firstly, search local variable
-  if (searchdecl(var, 0, 1) == 0)
+  " TODO: firstly, use my version of Searchdecl()
+  if (searchdecl(var, 1, 0) == 0)
     " code sample:
     " String tmp; java.
     " 	lang.  String str, value;
@@ -712,19 +745,20 @@ function! s:GetDeclaredClassName(var)
     "   j = 0;
     " }
     let declaration = s:GetVariableDeclaration()
-    let class = substitute(declaration, '\s*\([a-zA-Z0-9_.]\+\)\(\[\]\)\?\s\+.*', '\1\2', '')
+    " Assume it a class member, and remove modifiers
+    let class = substitute(declaration, '^\(public\s\+\|protected\s\+\|private\s\+\|static\s\+\|final\s\+\|native\s\+\)*', '', '')
+    let class = substitute(class, '\s*\([a-zA-Z0-9_.]\+\)\(\[\]\)\?\s\+.*', '\1\2', '')
     if isArrayElement
       let class = strpart(class, 0, stridx(class, '['))
     endif
     call s:Trace('class: "' . class . '" declaration: "' . declaration . '"')
-    return class
-
-  " secondly, search class field
-  " TODO:
-  elseif (searchdecl(var, 0) == 0)
+    let &ignorecase = ic
+    if class != '' && class !=# a:var 
+      return class
+    endif
   endif
 
-  let ignorecase = ic
+  let &ignorecase = ic
   call s:Trace('GetDeclaredClassName: cannot find')
   return ''
 endfunction
@@ -785,7 +819,7 @@ function! s:GetNextSubexprType(fqn, expr)
   call s:WatchVariant('resulttype: ' . resulttype)
 
 
-  if strlen(tail_expr) == 0 || resulttype == ''
+  if strlen(tail_expr) == 0 || resulttype == '' || s:IsBuiltinType(resulttype)
     return resulttype
   else
     return s:GetNextSubexprType(resulttype, tail_expr)
@@ -873,6 +907,14 @@ function! s:IsFQN(name)
   return res =~ '^true'
 endfunction
 
+fu! s:IsBuiltinType(name)
+  for type in ['boolean', 'byte', 'char', 'int', 'short', 'long', 'float', 'double']
+    if type == a:name
+      return 1
+    endif
+  endfor
+  return 0
+endfu
 
 function! s:GetClassPath()
   if exists('b:classpath') && b:classpath !~ '^\s*$'
@@ -954,6 +996,82 @@ function! s:GetMatchedIndex(str, idx)
   return pos
 endfunction
 
+fu! s:GotoUpperBracket()
+  let searched = 0
+  while (!searched)
+    call search('[{}]', 'bW')
+    if getline('.')[col('.')-1] == '}'
+      normal %
+    else
+      let searched = 1
+    endif
+  endwhile
+endfu
+
+" 	Improve recognition of variable declaration using my version of searchdecl() for accuracy reason.
+fu! s:Searchdecl(name, ...)
+  let global = a:0 > 0 ? a:1 : 0
+  let thisblock = a:0 > 1 ? a:2 : 1
+
+  call search('\<' . a:name . '\>', 'bW')
+  let lnum_old = line('.')
+  let col_old = col('.')
+
+  call s:GotoUpperBracket()
+  let lnum_bracket = line('.')
+  let col_bracket = col('.')
+  call search('\<' . a:name . '\>', 'W', lnum_old)
+  if line('.') != lnum_old || col('.') != col_old
+    return 0
+  endif
+
+  " search globally
+  if global
+    call cursor(lnum_bracket, col_bracket)
+    " search backward
+    while (1)
+      if search('\([{}]\|\<' . a:name . '\>\)', 'bW') == 0
+	break
+      endif
+      if s:InComment(line('.'), col('.')) "|| s:InStringLiteral()
+        continue
+      endif
+      let cword = expand('<cword>')
+      if cword == a:name
+	return 0
+      endif
+      if getline('.')[col('.')-1] == '}'
+	normal %
+      endif
+    endwhile
+
+    call cursor(lnum_old, col_old)
+    " search forward
+    call search('[{};]', 'W')
+    while (1)
+      if search('\([{}]\|\<' . a:name . '\>\)', 'W') == 0
+	break
+      endif
+      if s:InComment(line('.'), col('.')) "|| s:InStringLiteral()
+        continue
+      endif
+      let cword = expand('<cword>')
+      if cword == a:name
+	return 0
+      endif
+      if getline('.')[col('.')-1] == '{'
+	normal %
+      endif
+    endwhile
+  endif
+  return 1
+endfu
+"nmap <F8> :call <SID>Searchdecl(expand('<cword>'))<CR>
+
+fu! MemberCompare(m1, m2)
+  return a:m1['n'] == a:m2['n'] ? 0 : a:m1['n'] > a:m2['n'] ? 1 : -1
+endfu
+
 " debug utilities							{{{1
 fu! s:WatchVariant(variant)
   "echoerr a:variant
@@ -1005,11 +1123,17 @@ function! s:DoGetClassInfo(class, option)
     return {}
   endif
 
-  exe 'let dict = ' . res
-  if type(dict) == type({})
-    let s:cache[a:class] = dict
+  exe 'let ci = ' . res
+  if type(ci) == type({})
+    let s:cache[a:class] = ci
+    if has_key(ci, 'fields')
+      call sort(ci['fields'], 'MemberCompare')
+    endif
+    if has_key(ci, 'methods')
+      call sort(ci['methods'], 'MemberCompare')
+    endif
   endif
-  return dict
+  return ci
 endfunction
 
 " To obtain information of the class in current file or current folder, or
@@ -1070,7 +1194,7 @@ function! s:DoGetPackageList(class, option)
 
   exe 'let list = ' . res
   if type(list) == type([])
-    let s:cache[a:class] = list
+    let s:cache[a:class] = sort(list)
   endif
   return list
 endfunction
@@ -1137,9 +1261,9 @@ fu! s:DoGetMemberList(class, static)
   let s = s . s:DoGetMethodList(smethodlist)
 
   let s = '[' . s . ']'
+  let s = substitute(s, a:class . '\.', '', 'g')
   let s = substitute(s, 'java\.lang\.', '', 'g')
-  let s = substitute(s, 'public\s\+', '', 'g')
-  let s = substitute(s, 'static\s\+', '', 'g')
+  let s = substitute(s, '\(static\s\+\|public\s\+\|synchronized\s\+\|final\s\+\|native\s\+\)', '', 'g')
 
   exe 'let list = ' . s
   let b:et3 = reltimestr(reltime(time_a))
@@ -1177,8 +1301,8 @@ function! s:GetConstructorList(fqn, class)
 endfunction
 
 function! s:GetPackageContent(package)
-  return sort(s:DoGetPackageList(a:package, '-p'))
+  return s:DoGetPackageList(a:package, '-p')
 endfunction
 " }}}
 
-" vim:set foldmethod=marker:
+" vim:set fdm=marker sw=2 nowrap:
