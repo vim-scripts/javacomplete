@@ -1,143 +1,14 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.75
+" Version:	0.76
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-02-13
-" Changelog:
-" v0.50 2007-01-21	Use java and Reflection.class directly.
-" v0.60 2007-01-25	Design TClassInfo, etc.
-" v0.70 2007-01-27	Complete the reflection part.
-" v0.71 2007-01-28	Add Basic support for class in current folder.
-" v0.72 2007-01-31	Handle nested expression.
-" v0.73 2007-02-01
-" 	Fix bug that CLASSPATH not used when b:classpath or g:java_classpath not set.
-" 	Fix bug that call filter() without making a copy for incomplete.
-"	Improve recognition of declaration of this class
-" v0.74 2007-02-03
-" 	Support jre1.2 (and above).
-" 	Support input context like "boolean.class.|"
-" 	Handle java primitive types like 'int'.
-" v0.75 
-" 	Add java_parser.vim.
-" 	Add b:sourcepath option.
-" 	Improve recognition of classes defined in current buffer or in source path.
-" 	Support generating class information from tags instead of returning list directly.
+" Last Change:	2007-08-04
+" Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
+" License:	Vim License	(see vim's :help license)
 
-" Installation:								{{{1
-" 1. Place javacomplete.vim in the "autoload" directory, e.g.  $VIM/vimfiles/autoload
-"    Place java_parser.vim in the "ftplugin" directory, e.g.  $VIM/vimfiles/ftplugin
-" 2. Place classes of Reflection into classpath.
-"    You can also use jdk1.2 (and above) to recompile Reflection.java by yourself.
-"    NOTE: I don't test it on jdk1. Anybody who test it can tell me.
-" 3. Set 'omnifunc' option if necessary. e.g.
-" 	:setlocal omnifunc=javacomplete#Complete
-"    You can do it in a script like ftplugin/java_fc.vim.
-" 4. Add more jars or class directories to classpath, if you like. e.g.
-"	let g:java_classpath = '.;C:\java\lib\servlet.jar;C:\java\classes;C:\webapp\WEB-INF\lib\foo.jar;C:\webapp\WEB-INF\classes'
-"    or in unix/linux
-"	let g:java_classpath = '.:~/java/lib/servlet.jar:~/java/classes:~/java/webapp/WEB-INF/lib/foo.jar:~/java/webapp/WEB-INF/classes'
-"   Besides g:java_classpath, you can set b:classpath for specific projects and it is preferred.
-" 5. Set b:sourcepath if you like. Note that it's not a SEMI separated list.
-"
-" Usage:								{{{1
-" Assure that Reflection.class be in the class search path: b:classpath,
-" g:java_classpath, $CLASSPATH.
-" 1. Open a java file or a jsp file, press <C-X><C-O> in some places.
-" 
-" Tips:
-" 1. Set b:classpath for specific project setting.
-"    Set g:java_classpath for write snippets containing common jars you used.
-"
-"    
-" FAQ:									{{{1
-" 1. When you meets the following problem:
-" 	omni-completion error: Exception in thread "main" 
-"	java.lang.NoClassDefFoundError: Reflection
-" You can check $CLASSPATH, b:classpath and g:java_classpath. Assure that
-" Reflection.class be in the classpath.
-" 	
-"
-" Requirements:								{{{1
-" 1. input context:	('|' indicates cursor position)
-"   (1). after '.', to get the member list of a class or a package.
-"	- package.| 	sub packages and classes in 'package'
-"	- var.|		members of var
-"	- method().| 	members of method() result
-"	- this.|	members of the current class
-"	- super.|	members of the super class
-"	- array[i].|	members of the element in the array
-"	- array.|	members of an Array object
-"
-"   (2). after '(', or between '(' and ')', to get the list of methods matched with parameter information. It's better to provide javadoc.
-"	- method(|) 	methods matched
-"	- new Class(|) 	constructors matched
-"
-"   (3). after an incomplette word, to provide a candidates matched for selection.
-"	- var.ab| 	subset of members of var begining with 'ab'
-"	- ab		list of all maybes
-"
-"   (4). import statement
-"	- " import 	java.util.|"
-"	- " import 	java.ut|"
-"	- " import 	ja|"
-"	- " import 	java.lang.ThreadLocal.|"
-"	Many products do not implements case 4, including eclipse, jcreator.
-"
-"   The above are in simple expression.
-"   (5). after compound expression:
-"	- boolean.class.|
-"	- compound_expr.var.|
-"	- compound_expr.method().|
-"	- compound_expr.method(|)
-"	- compound_expr.var.ab|
-"	e.g.
-"	- "java.lang	. System.in .|"
-"	- "java.lang.System.getenv().|"
-"
-"   (6). Nested expression:
-"	- "System.out.println( str.| )"
-"	- "System.out.println(str.charAt(| )"
-"	- "for (int i = 0; i < str.|; i++)"
-
-" Implementation note:							{{{1
-" Read class information in the following order:
-"   1). A class defined in current editing source file.
-"   2). A public class in one of java files in current directory.
-"   3). A runtime loadable class avaible in classpath
-"   4). A class in one of java files in current directory(can be a nonpublic class).
-" For case 3), try to use JAVA's reflection mechanism. We should set classpath first.
-" For case 1),2),4), it is necessary to parse java file to read class information.
-" Prefer using tags file to using java_parser.vim for for performance reason.
-" The later way is slower, especially when source file is bigger than 40K.
-"	
-" 1. Just use the 'java' program to obtain most information:
-"    - Use reflection mechanism to obtain class information, including fields, methods and constructors.
-"    - To obtain package information. Not use other utilities (unzip, grep) for inefficiency and availability.
-"    - Use javadoc to generate document.
-"    I write the 'Reflection' class to do.
-"
-" 2. Most java syntax recognition are done with vim script.
-"    - To get the whole statement before cursor.
-"    - To get the declaration statement of a variable or a class.
-"    - To generate the imported packages and fqns.
-"    - To parse recursively compound expression.
-"    - To recognise whether an expression is a fqn.
-"
-" 3. Obtain class information from tags file(s).
-"
-" 4. Builtin objects in JSP can be recognized. 
-" You can press <C-X><C-O> after "session.|"
-"									}}}
-
-" TODO: 
-"  1. Solve name conflict, same name class in two packages or same name variable in two scopes.
-"  2. Improve class recognition in current folder, including nested class.
-"  3. javadoc
-"  4. Add balloonexpr, ballooneval, balloondelay
-"  5. Recognise inner classes
 
 " constants							{{{1
-" context type
+" input context type
 let s:CONTEXT_AFTER_DOT		= 1
 let s:CONTEXT_METHOD_PARAM	= 2
 let s:CONTEXT_IMPORT		= 3
@@ -176,112 +47,48 @@ let s:INVALID_FQNS = ['java', 'java.lang', 'com', 'org', 'javax']
 
 " local variables						{{{1
 let b:context_type = s:CONTEXT_OTHER
-let b:statement = ''			" statement before cursor
+"let b:statement = ''			" statement before cursor
 let b:dotexpr = ''			" expression before '.'
 let b:incomplete = ''			" incomplete word, three types: a. dotexpr.method(|) b. new classname(|) c. dotexpr.ab|
 let b:errormsg = ''
 let b:packages = []			
 let b:fqns = []
+let b:ast = {}				" Abstract Syntax Tree of the current buf
 
-" class definition						{{{1
-"TTree = 	" Root class for abstract syntax tree nodes.
-"	{
-"	'tag': int,	" type
-"	'pos': int,	" position
-"	'value': var,	" variant associated with node
-"	}
-"
-"TUnit = extend TTree
-"	{
-"	'package': '',			" package name
-"	'imports': [],			" imported fqns, including named import and start import
-"	'types': [TClassInfo, ...]	" types defined in this file
-"	}
-"
-"TClassDef = extend TTree
-"	{
-"	'name': '',				" type name
-"	'extendings': [typename, ...]		" one for class, many for interface
-"	'implementings': [typename, ...]	" the interfaces implemented by this class
-"	'members': [TMemberInfo, ...],		" defs, all variables and methods defined in this class
-"	'modifier': '',				" flags, class flags
-"	'javadoc': '',
-"	'ctors': [TCtorInfo, ...],
-"	'fields': [TFieldInfo,...],
-"	'methods': [TMethodInfo, ...],
-"	}
-"
-"TMemberInfo  = extend TTree
-"	{
-"	'n': '', 		" name of method, field, or ctor
-"	'm': '',		" modifier, or flags: public, private, protected
-"	't': ''			" type name
-"	'r': '', 		" type of method return value
-"	'p': [classname, ], 	" parameterTypes: the type name list of parameter
-"	'w': [exception, ],	" exceptions thrown by this method
-"	'b': '',		" block, statements in the method
-"	'd': '',		" description or javadoc
-"	}
-"
-
-"TFieldInfo = subset of TMemberInfo
-"	{
-"	'n': '',
-"	'm': '',
-"	't': ''	
-"	}
-"TMethodInfo = subset of TMemberInfo
-"	{
-"	'n': '', 
-"	'm': '',
-"	'r': '', 
-"	'p': [classname, ], 
-"	'd': ''	
-"	}
-"TCtorInfo = 
-"	{
-"	'n': '',
-"	'm': '',
-"	'p': [classname, ],
-"	'd': ''
-"	}
-"TClassInfo   = {
-"		'ctors': [TCtorInfo, ...],
-"		'fields': [TFieldInfo,...],
-"		'methods': [TMethodInfo, ...],
-"		}
-"TPackageInfo = ['subpackage', 'class', ......]
 " script variables						{{{1
-let s:cache = {}		" class FQN -> member list, e.g. {'java.lang.StringBuffer': classinfo, 'java.util': packageinfo, }
+let s:cache = {}	" class FQN -> member list or package FQN -> content list, e.g. {'java.lang.StringBuffer': classinfo, 'java.util': packageinfo, }
 
 
-" Complete function							{{{1
+" This function is used for the 'omnifunc' option.		{{{1
 function! javacomplete#Complete(findstart, base)
-  if s:GetClassPath() =~ '^\s*$'
-    echo "Please set $CLASSPATH, g:java_classpath or b:classpath firstly. And assure that Reflection.class be in class search path."
-    return -1
-  endif
-
   if a:findstart
     let b:performance = ''
     let b:et_whole = reltime()
     let start = col('.') - 1
+    let s:log = []
 
     " reset enviroment
     let b:dotexpr = ''
     let b:incomplete = ''
     let b:context_type = s:CONTEXT_OTHER
+    if !empty(b:ast) && changenr() > 0
+      let b:ast = {}
+    endif
 
     let statement = s:GetStatement()
     call s:WatchVariant('statement: "' . statement . '"')
-    if statement =~ '^\s*$'
+    let valid = statement =~ '[."(0-9A-Za-z_]\s*$'
+    if statement =~ '\.\s*$'
+      let valid = statement =~ '[")0-9A-Za-z_\]]\s*\.\s*$' && statement !~ '\<\H\w\+\.\s*$' && statement !~ '\<\(abstract\|assert\|break\|case\|catch\|const\|continue\|default\|do\|else\|enum\|extends\|final\|finally\|for\|goto\|if\|implements\|import\|instanceof\|interface\|native\|new\|package\|private\|protected\|public\|return\|static\|strictfp\|switch\|synchronized\|throw\|throws\|transient\|try\|volatile\|while\|true\|false\|null\)\.\s*$'
+    endif
+    if !valid
       return -1
     endif
 
     " import statement
     if statement =~ '^\s*import\s\+'
       let b:context_type = s:CONTEXT_IMPORT
-      let b:dotexpr = substitute(statement, '^\s*import\s\+', '', '')
+      let b:dotexpr = substitute(statement, '^\s*import\s\+\(static\s\+\)\?', '', '')
 
       let idx_dot = strridx(b:dotexpr, '.')
       " case: " import 	java.util.|"
@@ -298,7 +105,7 @@ function! javacomplete#Complete(findstart, base)
     endif
 
     let b:dotexpr = statement
-    call s:GenerateImports()
+    call s:KeepCursor('call s:GenerateImports()')
 
     " method parameters, treat methodname or 'new' as an incomplete word
     let len = strlen(statement)
@@ -357,6 +164,13 @@ function! javacomplete#Complete(findstart, base)
       return start - strlen(b:incomplete)
     endif
 
+    " String literal
+    if b:dotexpr =~  '"\s*\.\s*$'
+      let b:dotexpr = substitute(b:dotexpr, '\s*\.\s*$', '\.', '')
+      let b:context_type = s:CONTEXT_AFTER_DOT
+      return start - strlen(b:incomplete)
+    endif
+
     let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
 
     let end_char = statement[strlen(statement)-1]
@@ -380,6 +194,8 @@ function! javacomplete#Complete(findstart, base)
     return start - strlen(b:incomplete)
   endif
 
+
+  " Return list of matches.
 
   call s:WatchVariant('b:context_type: "' . b:context_type . '"  b:incomplete: "' . b:incomplete . '"  b:dotexpr: "' . b:dotexpr . '"')
   if b:dotexpr =~ '^\s*$' && b:incomplete =~ '^\s*$'
@@ -428,13 +244,25 @@ function! s:CompleteAfterDot()
   let expr = strpart(b:dotexpr, 0, strlen(b:dotexpr)-1)
   let expr = s:Trim(expr)	" trim head and tail spaces
 
+  " 0. String literal
+  call s:Info('S0. "str".|')
+  if expr =~  '"$'
+    return s:GetMemberList("java.lang.String")
+  endif
+
   let list = []
   " Simple expression without dot.
   " Assumes in the following order:
+  "	0) "int.|"	- builtin types
   "	1) "str.|"	- Simple variable declared in the file
   "	2) "String.|" 	- Type (whose definition is imported)
   "	3) "java.|"   	- First part of the package name
   if (stridx(expr, '.') == -1)
+    call s:Info('S0. "int.|" or "void.|"')
+    if s:IsBuiltinType(expr) || expr == 'void'
+      return [{'word': 'class', 'abbr': 'class', 'menu': 'Class'}]
+    endif
+
     " 1. assume it as variable 
     let class = s:GetDeclaredClassName(expr)
     call s:Info('S1. "str.|"  classname: "' . class . '"')
@@ -449,6 +277,7 @@ function! s:CompleteAfterDot()
 	if !empty(list)
 	  return list
 	endif
+	return []		" FIXME
       " class in current project, including current file or files in current folder
 "      elseif globpath(expand('%:p:h'), class . '.java') != ''
 "	return s:GetMemberListFromLocalClass(class)
@@ -463,14 +292,14 @@ function! s:CompleteAfterDot()
     " 2. assume identifier as a TYPE name. 
     " It is right if there is a fully qualified name matched. Then return member list
     call s:Info('S2. "String.|"')
-    let list = s:GetStaticMemberList(expr)
-    if !empty(list)
-      return list
-    endif
-"   let fqn = s:GetFQN(expr)
-"   if (fqn != '')
-"     return s:GetStaticMemberList(fqn)
-"   endif
+"    let list = s:GetStaticMemberList(expr)
+"    if !empty(list)
+"      return list
+"    endif
+   let fqn = s:GetFQN(expr)
+   if (fqn != '')
+     return s:GetStaticMemberList(fqn)
+   endif
 
     " 3. it may be the first part of a package name.
     call s:Info('S3. "java.|"')
@@ -502,23 +331,42 @@ function! s:CompleteAfterDot()
     endif
 
     " 0.
+    call s:Info('C0. "int.class.|" or "Integer.class.|"')
     if expr =~# '\.class$'
       return s:GetMemberList('java.lang.Class')
+    endif
+
+    call s:Info('C. check cache')
+    if has_key(s:cache, expr)
+      if type(s:cache[expr]) == type([])
+	return s:cache[expr]
+      elseif type(s:cache[expr]) == type({})
+	return s:GetStaticMemberList(expr)
+      else
+	echoerr 'Cache contains wrong data!'
+      endif
     endif
 
     " 1.
     call s:Info('C1. "java.lang.String.|"')
     let fqn = s:GetFQN(expr)
     if (fqn != '')
-      return s:GetStaticMemberList(fqn)
+      if type(s:cache[fqn]) == type([])
+	return s:cache[fqn]
+      elseif type(s:cache[fqn]) == type({})
+	return s:GetStaticMemberList(fqn)
+      else
+	echoerr 'Cache contains wrong data!'
+      endif
+      "return s:GetStaticMemberList(fqn)
     endif
 
     let idx_dot = stridx(expr, '.')
     let first = strpart(expr, 0, idx_dot)
 
     " 2|3. 
-    call s:Info('C2|3. "obj.var.|", or "sb.append().|"')
     let classname = s:GetDeclaredClassName(first)
+    call s:Info('C2|3. "obj.var.|", or "sb.append().|"  classname: "' . classname . '" for "' . first . '"')
     if (classname != '')
       if s:IsBuiltinType(classname)
 	return []
@@ -571,6 +419,20 @@ function! s:CompleteAfterDot()
 endfunction
 
 
+" Quick information						{{{1
+function! MyBalloonExpr()
+  if (searchdecl(v:beval_text, 1, 0) == 0)
+    return s:GetVariableDeclaration()
+  endif
+  return ''
+"  return 'Cursor is at line ' . v:beval_lnum .
+"	\', column ' . v:beval_col .
+"	\ ' of file ' .  bufname(v:beval_bufnr) .
+"	\ ' on word "' . v:beval_text . '"'
+endfunction
+"set bexpr=MyBalloonExpr()
+"set ballooneval
+
 " scanning and parsing							{{{1
 
 " Search back from the cursor position till meeting '{' or ';'.
@@ -622,15 +484,15 @@ endfu
 
 " Extract a clean expr, removing some non-necessary characters. 
 fu! s:ExtractCleanExpr(expr)
-  let cmd = substitute(a:expr, '[ \t\r\n]*\.', '.', 'g')
-  let cmd = substitute(cmd, '\.[ \t\r\n]*', '.', 'g')
+  let cmd = substitute(a:expr, '[ \t\r\n]*\.', '.', 'g')
+  let cmd = substitute(cmd, '\.[ \t\r\n]*', '.', 'g')
   let pos = strlen(cmd)-1 
   let char = cmd[pos]
-  while (pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\]]')
+  while pos != 0 && cmd[pos] =~ '[a-zA-Z0-9_.)\]]'
     if char == ')'
       let pos = s:GetMatchedIndex(cmd, pos)
     elseif char == ']'
-      while (char != '[')
+      while char != '['
 	let pos = pos - 1
 	let char = cmd[pos]
       endwhile
@@ -651,10 +513,7 @@ function! s:GenerateImports()
   let b:packages = ['java.lang.']
   let b:fqns = []
 
-  let lnum_old = line('.')
-  let col_old = col('.')
-
-  while (1)
+  while 1
     let lnum = search('\<import\>', 'Wb')
     if (lnum == 0)
       break
@@ -664,15 +523,13 @@ function! s:GenerateImports()
       continue
     end
 
-    let item = substitute(strpart(getline(lnum), col('.')-1), 'import\s\+\([a-zA-Z0-9.]\+\).*', '\1', '')
-    if item[strlen(item)-1] == '.'
-      call add(b:packages, item)
-    else
+    let item = substitute(strpart(getline(lnum), col('.')-1), 'import\s\+\(static\s\+\)\?\([a-zA-Z0-9_.*]\+\).*', '\2', '')
+    if item =~ '\*$'
+      call add(b:packages, strpart(item, 0, strlen(item)-1))
+    elseif item =~ '[A-Za-z0-9_]$'
       call add(b:fqns, item)
-    end
+    endif
   endwhile
-
-  call cursor(lnum_old, col_old)
 endfunction
 
 " Return: The declaration of identifier under the cursor
@@ -681,7 +538,7 @@ function! s:GetVariableDeclaration()
   let lnum_old = line('.')
   let col_old = col('.')
 
-  silent call search('[^a-zA-Z0-9$_.[\] \t\r\n]', 'bW')	" call search('[{};(,]', 'b')
+  silent call search('[^a-zA-Z0-9$_.,?<>[\] \t\r\n]', 'bW')	" call search('[{};(,]', 'b')
   normal w
   let lnum = line('.')
   let col = col('.')
@@ -720,7 +577,7 @@ fu! s:FoundClassLocally(type)
   endif
 
   " 
-  let srcpath = s:GetSourcePath()
+  let srcpath = javacomplete#GetSourcePath(1)
   let file = globpath(srcpath, substitute(fqn, '\.', '/', 'g') . '.java')
   if file != ''
     return 1
@@ -798,15 +655,9 @@ endfunction
 " Parser.GetType() in insenvim
 function! s:GetDeclaredClassName(var)
   let var = s:Trim(a:var)
-
   call s:Trace('GetDeclaredClassName for "' . var . '"')
-  if (var == 'this')
-    let declaration = s:GetThisClassDeclaration()
-    return declaration[1]
-  elseif (var == 'super')
-    let declaration = s:GetThisClassDeclaration()
-    " TODO:
-    return ''
+  if var =~# '^\(this\|super\)$'
+    return var
   endif
 
 
@@ -826,6 +677,30 @@ function! s:GetDeclaredClassName(var)
   endif
 
 
+  " TODO:
+  " use java_parser.vim
+  if empty(b:ast)
+    call java_parser#InitParser(getline('^', '$'))
+    call java_parser#SetLogLevel(5)
+    let b:ast = java_parser#compilationUnit()
+  endif
+  let matchs = []
+  for type in b:ast.types
+    let matchs += s:SearchNameInAST(type, var, java_parser#MakePos(line('.')-1, col('.')-1))
+  endfor
+  "call s:Info(var . ' ' . string(matchs) . ' line: ' . line('.') . ' col: ' . col('.'))
+  if empty(matchs)
+    return ''
+  else
+    let tree = matchs[len(matchs)-1]
+    if isArrayElement
+      return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype.elementtype) : ''
+    else
+      return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype) : ''
+    endif
+  endif
+
+
   let ic = &ignorecase
   setlocal noignorecase
 
@@ -841,10 +716,11 @@ function! s:GetDeclaredClassName(var)
     " Assume it a class member, and remove modifiers
     let class = substitute(declaration, '^\(public\s\+\|protected\s\+\|private\s\+\|abstract\s\+\|static\s\+\|final\s\+\|native\s\+\)*', '', '')
     let class = substitute(class, '\s*\([a-zA-Z0-9_.]\+\)\(\[\]\)\?\s\+.*', '\1\2', '')
+    let class = substitute(class, '\([a-zA-Z0-9_.]\)<.*', '\1', '')
     if isArrayElement
       let class = strpart(class, 0, stridx(class, '['))
     endif
-    call s:Trace('class: "' . class . '" declaration: "' . declaration . '"')
+    call s:Info('class: "' . class . '" declaration: "' . declaration . '" for ' . a:var)
     let &ignorecase = ic
     if class != '' && class !=# a:var && class !=# 'import' && class !=# 'class'
       return class
@@ -875,22 +751,27 @@ function! s:GetNextSubexprType(fqn, expr)
     let next_subexpr = strpart(expr, 0, idx)
     if expr[idx] == '('
       let isMethod = 1
+      call s:WatchVariant('expr "' . expr . ' idx ' .idx)
       let tail_expr = strpart(expr, s:GetMatchedIndexEx(expr, idx, '(', ')')+2)
     else
       let tail_expr = strpart(expr, idx)
     endif
   endif
-  call s:WatchVariant('expr "' . expr . '" next_subexpr: "' . next_subexpr . '" isMethod: "' . isMethod . '" tail_expr: "' . tail_expr . '"')
+  call s:WatchVariant('fqn ' . a:fqn . ' expr "' . expr . '" next_subexpr: "' . next_subexpr . '" isMethod: "' . isMethod . '" tail_expr: "' . tail_expr . '"')
 
 
   " search in the classinfo
   let classinfo = s:DoGetClassInfo(a:fqn)
-  if classinfo == {}
+  if len(classinfo) == 0
     return ''
   endif
 
   let resulttype = ''
-  if isMethod
+  if next_subexpr == 'this'
+    let resulttype = a:fqn
+  elseif next_subexpr == 'super'
+    let resulttype = a:fqn	" FIXME
+  elseif isMethod
     if has_key(classinfo, 'methods')
       for method in classinfo['methods']
 	if method['n'] == next_subexpr
@@ -919,9 +800,242 @@ function! s:GetNextSubexprType(fqn, expr)
   endif
 endfunction
 
+" using java_parser.vim					{{{1
+fu! javacomplete#parse()
+  if empty(b:ast)	" changenr() == 0 && 
+    call java_parser#InitParser(getline('^', '$'))
+    call java_parser#SetLogLevel(5)
+    let b:ast = java_parser#compilationUnit()
+  endif
+endfu
+
+" TODO:
+fu! javacomplete#Searchdecl()
+  let var  = expand('<cword>')
+
+  let line = line('.')-1
+  let col  = col('.')-1
+
+
+  if var =~# '^\(this\|super\)$'
+    call javacomplete#parse()
+    let targetPos = java_parser#MakePos(line, col)
+    let matchs = []
+    for type in b:ast.types
+      let matchs += s:SearchTypeAt(type, targetPos)
+    endfor
+
+    let stat = s:GetStatement()
+    for t in matchs
+      if stat =~ t.name
+	let coor = java_parser#DecodePos(t.pos)
+	return var . '(' . (coor.line+1) . ',' . (coor.col) . ') ' . getline(coor.line+1)
+      endif
+    endfor
+    if len(matchs) > 0
+      let coor = java_parser#DecodePos(matchs[len(matchs)-1].pos)
+      return var . '(' . (coor.line+1) . ',' . (coor.col) . ') ' . getline(coor.line+1)
+    endif
+    return ''
+  endif
+
+  " Type.this.
+  " new Type()
+  " new Type(param1, param2)
+  " this.field
+  " super.field
+
+  let b:performance = ''
+  let b:et_whole = reltime()
+  let s:log = []
+
+  call s:KeepCursor('call s:GenerateImports()')
+
+  " It may be an imported class.
+  let imports = []
+  for fqn in b:fqns
+    if fqn =~# '\<' . var . '\>$'
+      call add(imports, fqn)
+    endif
+  endfor
+  if len(imports) > 1
+    echoerr 'Imports conflicts between ' . join(imports, ' and ')
+  endif
+
+
+  " Search in this buffer
+  if changenr() == 0 && empty(b:ast)
+    call java_parser#InitParser(getline('^', '$'))
+    call java_parser#SetLogLevel(5)
+    let b:ast = java_parser#compilationUnit()
+  endif
+  let matchs = []
+  let targetPos = java_parser#MakePos(line, col)
+  for type in b:ast.types
+    let matchs += s:SearchNameInAST(type, var, targetPos)
+  endfor
+
+
+  let hint = var . ' '
+  if !empty(matchs)
+    let tree = matchs[len(matchs)-1]
+    let coor = java_parser#DecodePos(tree.pos)
+    let hint .=  '(' . (coor.line+1) . ',' . (coor.col) . ') '
+    let hint .= getline(coor.line+1)		"string(tree)
+  else
+    for fqn in imports
+      let ci = s:DoGetClassInfo(fqn)
+      if !empty(ci)
+	let hint .= ' ' . fqn
+      endif
+      " TODO: get javadoc
+    endfor
+
+  endif
+  return hint
+endfu
+
+fu! s:SearchTypeAt(tree, targetPos)
+  let matchs = []
+  if a:tree.pos <= a:targetPos && a:targetPos <= a:tree.endpos
+    call add(matchs, a:tree)
+    for def in a:tree.defs
+      if def.tag == 'CLASSDEF'
+	let matchs += s:SearchTypeAt(def, a:targetPos)
+      endif
+    endfor
+  endif
+  return matchs
+endfu
+
+" precondition: name must exists in unit.
+" return	a stack of matched
+" 搜索限于statement子类
+fu! s:SearchNameInAST(tree, name, targetPos)
+  if type(a:tree) == type([])
+    return []
+  endif
+  if !java_parser#IsStatement(a:tree) "&& !(a:tree.pos <= a:targetPos && a:targetPos <= a:tree.endpos)
+    return []
+  endif
+
+  let matchs = []
+  if type(a:tree) == type([])
+    for i in a:tree
+      let matchs += s:SearchNameInAST(i, a:name, a:targetPos)
+    endfor
+    return matchs
+  endif
+
+
+  if a:tree.tag == 'CLASSDEF'
+    let type = a:tree
+    " first, a class?
+    if type.name == a:name
+      call add(matchs, type)
+    endif
+
+    for def in type.defs
+      " a field?
+      if def.tag == 'VARDEF' && def.name == a:name
+	call add(matchs, def)
+
+      " a method?
+      elseif def.tag == 'METHODDEF'
+	if def.name == a:name
+	  call add(matchs, def)
+	endif
+
+	" then, a local variable or a parameter in the body ?
+	" cursor must be in this block
+	if has_key(def, 'body') && def.body.pos <= a:targetPos && a:targetPos <= def.body.endpos
+	  " a method parameter?
+	  for param in def.params
+	    if param.name == a:name
+	      call add(matchs, param)
+	    endif
+	  endfor
+
+	  " It is importan that just move the scanning position, avoid changing the buf!!!
+	  call java_parser#GotoPosition(def.body.pos)
+	  let block = java_parser#block()
+	  let matchs += s:SearchNameInAST(block, a:name, a:targetPos)
+	endif
+
+      " in a static block or a nested class?
+      else
+	let matchs += s:SearchNameInAST(def, a:name, a:targetPos)
+      endif
+    endfor
+    return matchs
+
+  elseif a:tree.tag == 'VARDEF'
+    if a:tree.name == a:name
+      return [a:tree]
+    endif
+
+  elseif a:tree.tag == 'BLOCK'
+    for stat in a:tree.stats
+      if stat.tag == 'VARDEF'
+	let matchs += s:SearchNameInAST(stat, a:name, a:targetPos)
+
+      elseif stat.tag == 'BLOCK'
+	let matchs += s:SearchNameInAST(stat, a:name, a:targetPos)
+
+      elseif stat.tag == 'IF'
+	let matchs += s:SearchNameInAST(stat.cond, a:name, a:targetPos)
+	let matchs += s:SearchNameInAST(stat.thenpart, a:name, a:targetPos)
+	if has_key(stat, 'elsepart')
+	  let matchs += s:SearchNameInAST(stat.elsepart, a:name, a:targetPos)
+	endif
+	
+      elseif stat.tag == 'FORLOOP'
+	let matchs += s:SearchNameInAST(stat.init, a:name, a:targetPos)
+	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
+
+      elseif stat.tag == 'WHILELOOP'
+	let matchs += s:SearchNameInAST(stat.cond, a:name, a:targetPos)
+	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
+
+      elseif stat.tag == 'DOLOOP'
+	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
+
+      elseif stat.tag == 'TRY'
+	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
+	if has_key(stat, 'catchers')
+	  for catch in stat.catchers
+	    let matchs += s:SearchNameInAST(catch.param, a:name, a:targetPos)
+	    let matchs += s:SearchNameInAST(catch.body, a:name, a:targetPos)
+	  endfor
+	endif
+	if has_key(stat, 'finalizer')
+	  let matchs += s:SearchNameInAST(stat.finalizer, a:name, a:targetPos)
+	endif
+
+      elseif stat.tag == 'SWITCH'
+	for case in stat.cases
+	  let matchs += s:SearchNameInAST(case, a:name, a:targetPos)
+	endfor
+
+      elseif stat.tag == 'SYNCHRONIZED'
+	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
+
+      endif
+    endfor
+  endif
+
+  return matchs
+endfu
+
+
 " java							{{{1
 " NOTE: See CheckFQN, GetFQN in insenvim
 function! s:GetFQN(name)
+  " Consider 'this' or 'super' as class name. It will be handled DoGetClassInfo().
+  if a:name =~# '^\(this\|super\)$'
+    return a:name
+  endif
+
   " Has user-defined abbreviations?
   if has_key(s:CLASS_ABBRS, a:name)
     return s:CLASS_ABBRS[a:name]
@@ -953,15 +1067,53 @@ function! s:GetFQN(name)
     endif
   endfor
 
-  call s:Debug('GetFQN: to check case 3: under each b:packages?')
-  " Search for a:name under each b:packages
+  " 看本地及sourcepath是否有该类
+  call s:Debug('GetFQN: to check case 3: a class in this buffer, or same package, or sourcepath?')
+  call javacomplete#parse()
+  let targetPos = java_parser#MakePos(line('.')-1, col('.')-1)
+  let matchs = []
+  for type in b:ast.types
+    let matchs += s:SearchTypeAt(type, targetPos)
+  endfor
+  for t in matchs
+    if t.name == a:name
+      return a:name
+    endif
+  endfor
+
   " TODO: solve name conflict
-  for package in b:packages
-    let fqn = package . a:name
-    if (s:IsFQN(fqn))
+  let srcpath = javacomplete#GetSourcePath(1)
+  let file = globpath(substitute(srcpath, javacomplete#GetClassPathSep(), ',', 'g'), substitute(a:name, '\.', '/', 'g') . '.java')
+  if file != ''
+    return a:name
+  endif
+  for p in b:packages
+    let fqn = p . a:name
+    let file = globpath(substitute(srcpath, javacomplete#GetClassPathSep(), ',', 'g'), substitute(fqn, '\.', '/', 'g') . '.java')
+    if file != ''
       return fqn
     endif
   endfor
+
+  call s:Debug('GetFQN: to check case 4: a nonlocal class in one of b:packages?')
+  " Send a batch of candidates to Reflection for checking and reading class information.
+  if len(b:packages) > 0 && a:name =~ '^\h\(\w*\)$'
+    let seplist = join(b:packages, a:name . ',') . a:name
+    let res = s:RunReflection('-E', seplist, 's:GetFQN in Batch')
+    if len(res) > 0 && res =~ "^{'"
+      exe 'let dict = ' . res
+      for key in keys(dict)
+	if type(dict[key]) == type({})
+	  let s:cache[key] = s:Sort(dict[key])
+	endif
+      endfor
+      if len(keys(dict)) > 1
+	echoerr 'Name conflicts between ' . join(keys(dict), ' and ')
+      else
+	return keys(dict)[0]
+      endif
+    endif
+  endif
 
   call s:Debug('GetFQN: is not a fqn')
   return ''
@@ -996,63 +1148,240 @@ function! s:IsFQN(name)
   " class defined in current source path
   " TODO:
 
-  let cmd = 'java -classpath ' . s:GetClassPath() . ' Reflection -e "' . a:name . '"'
-  let res = s:System(cmd, 's:IsFQN')
-  return res =~ '^true'
+  let res = s:RunReflection('-E', a:name, 's:IsFQN')
+  if len(res) > 0 && res =~ "^{'"
+    exe 'let dict = ' . res
+    for key in keys(dict)
+      if type(dict[key]) == type({})
+	let s:cache[key] = s:Sort(dict[key])
+      elseif type(dict[key]) == type([])
+	let s:cache[key] = sort(dict[key])
+      endif
+    endfor
+    if len(keys(dict)) > 1
+      echoerr 'Name conflicts between ' . join(keys(dict), ' and ')
+    else
+      return 1
+    endif
+  else
+    return 0
+  endif
+
+  "let res = s:RunReflection('-e', a:name, 's:IsFQN')
+  "return res =~ '^true'
 endfunction
 
 fu! s:IsBuiltinType(name)
-  for type in ['boolean', 'byte', 'char', 'int', 'short', 'long', 'float', 'double']
-    if type == a:name
-      return 1
-    endif
-  endfor
-  return 0
+  return a:name =~# '^\(boolean\|byte\|char\|int\|short\|long\|float\|double\)$'
 endfu
 
-function! s:GetClassPath()
-  if exists('b:classpath') && b:classpath !~ '^\s*$'
-    return b:classpath
-  endif
-  if exists('g:java_classpath') && g:java_classpath !~ '^\s*$'
-    return g:java_classpath
-  endif
-  return $CLASSPATH
-endfunction
+" options								{{{1
+" JDK1.1								{{{2
+fu! javacomplete#UseJDK11()
+  let s:isjdk11 = 1
+endfu
 
-function! s:GetSourcePath()
-  if exists('b:sourcepath') && b:classpath !~ '^\s*$'
-    return b:sourcepath
+" java compiler								{{{2
+fu! javacomplete#GetCompiler()
+  return exists('s:compiler') && s:compiler !~  '^\s*$' ? s:compiler : 'javac'
+endfu
+
+fu! javacomplete#SetCompiler(compiler)
+  let s:compiler = a:compiler
+endfu
+
+" jvm launcher								{{{2
+fu! javacomplete#GetJVMLauncher()
+  return exists('s:interpreter') && s:interpreter !~  '^\s*$' ? s:interpreter : 'java'
+endfu
+
+fu! javacomplete#SetJVMLauncher(interpreter)
+  let s:interpreter = a:interpreter
+endfu
+
+" sourcepath								{{{2
+fu! javacomplete#AddSourcePath(s)
+  if !exists('s:sourcepath')
+    let s:sourcepath = [a:s]
+    return
   endif
+
+  let found = 0
+  for i in s:sourcepath
+    if i == a:s
+      let found = 1
+    endif
+  endif
+  if !found
+    call add(s:sourcepath, a:s)
+  endif
+endfu
+
+fu! javacomplete#DelSourcePath(s)
+  if !exists('s:sourcepath') | return   | endif
+  let i = 0
+  while i < len(s:sourcepath)
+    if s:sourcepath[i] == a:s
+      call remove(s:sourcepath, i)
+      return
+    endif
+    let i += 1
+  endwhile
+endfu
+
+fu! javacomplete#SetSourcePath(s)
+  if type(a:s) == type("")
+    let s:sourcepath = split(a:, javacomplete#GetClassPathSep())
+  elseif type(a:s) == type([])
+    let s:sourcepath = a:s
+  endif
+endfu
+
+" return the sourcepath. Given argument, add current path or default package root path
+" NOTE: Avoid sourcepath item repeated, otherwise globpath() will return more than
+" result.
+fu! javacomplete#GetSourcePath(...)
+  let sourcepath = ''
+  if exists('s:sourcepath') && s:sourcepath !~ '^\s*$'
+    let sourcepath = join(s:sourcepath, javacomplete#GetClassPathSep())
+  endif
+
+  if a:0 == 0
+    return sourcepath
+  endif
+
+
+  let filepath = expand('%:p:h')
 
   " get source path according to file path and package name
-  let packageName = ''
-  if exists('*Java_getPackageName')
-    call Java_InitParser(getline('^', '$'))
-    let packageName = Java_getPackageName()
-  endif
-  if packageName == ''
-    let lnum_old = line('.')
-    let col_old = col('.')
-
-    call cursor(0, 0)
-    let lnum = search('^\s*package[ \t\r\n]\+\([a-zA-Z][a-zA-Z0-9.]*\);', 'w')
-    let packageName = substitute(getline(lnum), '^\s*package\s\+\([a-zA-Z][a-zA-Z0-9.]*\);', '\1', '')
-
-    call cursor(lnum_old, col_old)
-  endif
+  let packageName = s:GetPackageName()
   if packageName != ''
-    return substitute(expand('%:p:h'), packageName, '', 'g')
+    let path = substitute(filepath, packageName, '', 'g')
+    if sourcepath == ''
+      let sourcepath .= path
+    elseif sourcepath !~ path
+      let sourcepath .= path . javacomplete#GetClassPathSep() . sourcepath
+    endif
   endif
 
-  return ''
-endfunction
+  " Consider current path as a sourcepath
+  if sourcepath == ''
+    return filepath
+  elseif sourcepath !~ path
+    return filepath . javacomplete#GetClassPathSep() . sourcepath
+  endif
+endfu
+
+" classpath								{{{2
+fu! javacomplete#AddClassPath(s)
+  if !exists('s:classpath')
+    let s:classpath = [a:s]
+    return
+  endif
+
+  let found = 0
+  for i in s:classpath
+    if i == a:s
+      let found = 1
+    endif
+  endif
+  if !found
+    call add(s:classpath, a:s)
+  endif
+endfu
+
+fu! javacomplete#DelClassPath(s)
+  if !exists('s:classpath') | return   | endif
+  let i = 0
+  while i < len(s:classpath)
+    if s:classpath[i] == a:s
+      call remove(s:classpath, i)
+      return
+    endif
+    let i += 1
+  endwhile
+endfu
+
+fu! javacomplete#SetClassPath(s)
+  if type(a:s) == type("")
+    let s:classpath = split(a:s, javacomplete#GetClassPathSep())
+  elseif type(a:s) == type([])
+    let s:classpath = a:s
+  endif
+endfu
+
+fu! javacomplete#GetClassPathSep()
+  return !has("win32") ? ":" : ";"
+endfu
+
+fu! javacomplete#GetClassPath()
+  return exists('s:classpath') ? join(s:classpath, javacomplete#GetClassPathSep()) : ''
+endfu
+
+" s:GetClassPath()							{{{2
+fu! s:GetClassPath()
+  let path = s:GetJavaCompleteClassPath() . javacomplete#GetClassPathSep()
+
+  if exists('b:classpath') && b:classpath !~ '^\s*$'
+    return path . b:classpath
+  endif
+
+  if exists('s:classpath')
+    return path . javacomplete#GetClassPath()
+  endif
+
+  if exists('g:java_classpath') && g:java_classpath !~ '^\s*$'
+    return path . g:java_classpath
+  endif
+
+  return path . $CLASSPATH
+endfu
+
+fu! s:GetJavaCompleteClassPath()
+  let classfile = globpath(&rtp, 'autoload/Reflection.class')
+  if classfile == ''
+    let classfile = globpath($HOME, 'Reflection.class')
+  endif
+  if classfile == ''
+    " try to find source file and compile to $HOME
+    let srcfile = globpath(&rtp, 'autoload/Reflection.java')
+    if srcfile != ''
+      exe '!' . javacomplete#GetCompiler() . ' -d "' . $HOME . '" ' . srcfile
+      let classfile = globpath($HOME, 'Reflection.class')
+      if classfile == ''
+	echo srcfile . ' can not be compiled. Please check it'
+      endif
+    else
+      echo 'No Reflection.class found in $HOME or any autoload directory of the &rtp. And no Reflection.java found in any autoload directory of the &rtp to compile.'
+    endif
+  endif
+  return fnamemodify(classfile, ':p:h')
+endfu
+
+" s:GetPackageName()							{{{2
+fu! s:GetPackageName()
+  let lnum_old = line('.')
+  let col_old = col('.')
+
+  call cursor(0, 0)
+  let lnum = search('^\s*package[ \t\r\n]\+\([a-zA-Z][a-zA-Z0-9.]*\);', 'w')
+  let packageName = substitute(getline(lnum), '^\s*package\s\+\([a-zA-Z][a-zA-Z0-9.]*\);', '\1', '')
+
+  call cursor(lnum_old, col_old)
+  return packageName
+endfu
 
 fu! s:IsStatic(modifier)
   return a:modifier[strlen(a:modifier)-4]
 endfu
 
 " utilities							{{{1
+fu! s:KeepCursor(cmd)
+  let lnum_old = line('.')
+  let col_old = col('.')
+  exe a:cmd
+  call cursor(lnum_old, col_old)
+endfu
 
 function! s:InComment(line, col)
   return synIDattr(synID(a:line, a:col, 1), "name") =~? 'comment'
@@ -1091,7 +1420,7 @@ function! s:GetMatchedIndexEx(str, idx, one, another)
   let pos = a:idx
   let len = strlen(a:str)
   let char = a:str[pos]
-  while (char != a:another)
+  while char != a:another
     if pos >= len
       return -1
     endif
@@ -1100,6 +1429,9 @@ function! s:GetMatchedIndexEx(str, idx, one, another)
     "echo char
     if (char == a:one)
       let pos = s:GetMatchedIndexEx(a:str, pos, a:one, a:another)
+      if pos == -1
+	return -1
+      endif
     endif
   endwhile
   return pos
@@ -1191,21 +1523,47 @@ fu! s:Searchdecl(name, ...)
 endfu
 "nmap <F8> :call <SID>Searchdecl(expand('<cword>'))<CR>
 
-" debug utilities							{{{1
+" Log utilities								{{{1
 fu! s:WatchVariant(variant)
   "echoerr a:variant
 endfu
 
-fu! s:Info(msg)
-  "echo a:msg
+" level
+" 	5	off/fatal 
+" 	4	error 
+" 	3	warn
+" 	2	info
+" 	1	debug
+" 	0	trace
+fu! javacomplete#SetLogLevel(level)
+  let s:loglevel = a:level
 endfu
 
-fu! s:Debug(msg)
-  "echo a:msg
+fu! javacomplete#GetLogLevel()
+  return exists('s:loglevel') ? s:loglevel : 3
+endfu
+
+fu! javacomplete#GetLogContent()
+  return s:log
 endfu
 
 fu! s:Trace(msg)
-  "echo a:msg
+  call s:Log(0, a:msg)
+endfu
+
+fu! s:Debug(msg)
+  call s:Log(1, a:msg)
+endfu
+
+fu! s:Info(msg)
+  call s:Log(2, a:msg)
+endfu
+
+fu! s:Log(level, key, ...)
+  if a:level >= javacomplete#GetLogLevel()
+    echo a:key
+    call add(s:log, a:key)
+  endif
 endfu
 
 fu! s:System(cmd, caller)
@@ -1218,22 +1576,32 @@ endfu
 
 " functions to get information						{{{1
 " utilities								{{{2
-fu! MemberCompare(m1, m2)
+fu! s:MemberCompare(m1, m2)
   return a:m1['n'] == a:m2['n'] ? 0 : a:m1['n'] > a:m2['n'] ? 1 : -1
 endfu
 
 fu! s:Sort(ci)
   let ci = a:ci
   if has_key(ci, 'fields')
-    call sort(ci['fields'], 'MemberCompare')
+    call sort(ci['fields'], 's:MemberCompare')
   endif
   if has_key(ci, 'methods')
-    call sort(ci['methods'], 'MemberCompare')
+    call sort(ci['methods'], 's:MemberCompare')
   endif
   return ci
 endfu
 
-" implementation							{{{2
+" Function to run Reflection						{{{2
+fu! s:RunReflection(option, args, log)
+  let classpath = ''
+  if !exists('s:isjdk11')
+    let classpath = ' -classpath "' . s:GetClassPath() . '" '
+  endif
+
+  let cmd = javacomplete#GetJVMLauncher() . classpath . ' Reflection ' . a:option . ' "' . a:args . '"'
+  return s:System(cmd, a:log)
+endfu
+" class information							{{{2
 
 
 fu! s:DoGetClassInfo(class, ...)
@@ -1242,6 +1610,55 @@ fu! s:DoGetClassInfo(class, ...)
   endif
 
   let ci = {}
+
+  if a:class =~ ']$'
+    return s:DoGetClassInfo('[Ljava.lang.Object;')
+  endif
+
+  if a:class =~# '^\(this\|super\)$'
+    call s:Info('A0. ' . a:class)
+    call javacomplete#parse()
+    let targetPos = java_parser#MakePos(line('.')-1, col('.')-1)
+    let matchs = []
+    for type in b:ast.types
+      let matchs += s:SearchTypeAt(type, targetPos)
+    endfor
+
+    let t = {}
+    let stat = s:GetStatement()
+    for m in matchs
+      if stat =~ m.name
+	let t = m
+	break
+      endif
+    endfor
+    if empty(t) && len(matchs) > 0
+      let t = matchs[len(matchs)-1]
+    endif
+    if !empty(t)
+      if a:class == 'this'
+	let ci = s:Tree2ClassInfo(t)
+      elseif a:class == 'super'
+	let list = []
+	if len(t.extends) > 0
+	  call add(list, java_parser#type2Str(t.extends[0]))
+	endif
+	if has_key(t, 'implements')
+	  for i in t.implements
+	    call add(list, java_parser#type2Str(i))
+	  endfor
+	endif
+	for id in list
+	  let fqn = s:GetFQN(id)
+	  if fqn != ''
+	    let ci = s:MergeClassInfo(ci, s:DoGetClassInfo(fqn))
+	  endif
+	endfor
+	call s:Sort(ci)
+      endif
+    endif
+    return ci
+  endif
 
   " Assumption 1: a class defined in current buffer(maybe an editing file)
   " Search class declaration in current buffer
@@ -1256,18 +1673,23 @@ fu! s:DoGetClassInfo(class, ...)
 
   " Assumption 2: a class defined in current folder (or subfolder)
   let file = globpath(expand('%:p:h'), a:class . '.java')
+  let fqn = ''
   if file == ''
-    let srcpath = s:GetSourcePath()
-    let fqn = s:GetFQN(a:class)
-    let file = globpath(srcpath, substitute(fqn, '\.', '/', 'g') . '.java')
+    let srcpath = javacomplete#GetSourcePath(1)
+    let fqn = stridx(a:class, '.') == -1 ? s:GetFQN(a:class) : a:class
+    let file = globpath(substitute(srcpath, javacomplete#GetClassPathSep(), ',', 'g'), substitute(fqn, '\.', '/', 'g') . '.java')
   endif
   if file != ''
-    call s:Info('A2. class in current folder')
-    let ci = s:GetLocalClassInfo(a:class, file)
+    call s:Info('A2. toplevel class in current folder, same package or sourcepath')
+    if has_key(s:cache, fqn) "TODO: && NotModified
+      return s:cache[fqn]
+    endif
+
+    let ci = s:GetLocalClassInfo(strpart(a:class, strridx(a:class, '.')+1, strlen(a:class)), file)
     if !empty(ci)
+      let s:cache[fqn == '' ? a:class : fqn] = s:Sort(ci)
       return ci
     endif
-    " refresh according to modified date
   endif
 
   " Assumption 3: a runtime loadable class avaible in classpath
@@ -1277,8 +1699,7 @@ fu! s:DoGetClassInfo(class, ...)
       return s:cache[fqn]
     endif
 
-    let cmd = 'java -classpath ' . s:GetClassPath() . ' Reflection -C "' . fqn . '"'
-    let res = s:System(cmd, 's:DoGetClassInfo')
+    let res = s:RunReflection('-C', fqn, 's:DoGetClassInfo')
     if !empty(res) && res =~ "^{"
       exe 'let ci = ' . res
       if type(ci) == type({})
@@ -1298,6 +1719,37 @@ fu! s:DoGetClassInfo(class, ...)
   return ci
 endfu
 
+fu! s:MergeClassInfo(ci, another)
+  if empty(a:ci)	| return a:another	| endif
+  if empty(a:another)	| return a:ci		| endif
+
+  for f in a:another.fields
+    let found = 0
+    for i in a:ci.fields
+      if f.n == i.n
+	let found = 1
+      endif
+    endfor
+    if !found
+      call add(a:ci.fields, f)
+    endif
+  endfor
+
+  for m in a:another.methods
+    let found = 0
+    for i in a:ci.methods
+      if m.n == i.n
+	let found = 1
+      endif
+    endfor
+    if !found
+      call add(a:ci.methods, m)
+    endif
+  endfor
+  return a:ci
+endfu
+
+
 " Parameters:
 "   class	the qualified class name
 "   option	static members or all
@@ -1309,8 +1761,7 @@ function! s:DoGetReflectionClassInfo(class, option)
     return s:cache[a:class]
   endif
 
-  let cmd = 'java -classpath ' . s:GetClassPath() . ' Reflection -C "' . a:class . '"'
-  let res = s:System(cmd, 's:DoGetClassInfo')
+  let res = s:RunReflection('-C', a:class, 's:DoGetReflectionClassInfo')
   if len(res) == 0
     return {}
   endif
@@ -1334,41 +1785,44 @@ fu! s:GetLocalClassInfo(class, filename)
 
   if empty(ci)
     call s:Info('Use java_parser.vim to generate class information')
-    let lines = []
     if a:filename == '%'
-      let lines = getline('^', '$')
+      call javacomplete#parse()
+      let ci = s:DoGetLocalClassInfo(a:class, b:ast)
     else
-      let lines = readfile(a:filename)
+      call java_parser#InitParser(readfile(a:filename))
+      let time = reltime()
+      let unit = java_parser#compilationUnit()
+      let b:et_perf2 = reltimestr(reltime(time))
+      let ci = s:DoGetLocalClassInfo(a:class, unit)
     endif
-    let ci = s:DoGetLocalClassInfo(a:class, lines)
   endif
   return ci
 endfu
 
-fu! s:DoGetLocalClassInfo(class, lines)
-  call Java_InitParser(a:lines)
-  let time = reltime()
-  let unit = Java_compilationUnit()
-  let b:et_perf2 = reltimestr(reltime(time))
-
-  if has_key(unit, 'types')
-    for t in unit['types']
+fu! s:DoGetLocalClassInfo(class, unit)
+  if has_key(a:unit, 'types')
+    for t in a:unit['types']
       if t['name'] == a:class
-	" fill fields and methods
-	let t['fields'] = []
-	let t['methods'] = []
-	for def in t['defs']
-	  if def['tag'] == 'METHODDEF'
-	    call add(t['methods'], def)
-	  elseif def['tag'] == 'VARDEF'
-	    call add(t['fields'], def)
-	  endif
-	endfor
-	return t
+	return s:Tree2ClassInfo(t)
       endif
     endfor
   endif
   return {}
+endfu
+
+fu! s:Tree2ClassInfo(t)
+  let t = a:t
+  " fill fields and methods
+  let t.fields = []
+  let t.methods = []
+  for def in t.defs
+    if def.tag == 'METHODDEF'
+      call add(t.methods, def)
+    elseif def['tag'] == 'VARDEF'
+      call add(t.fields, def)
+    endif
+  endfor
+  return t
 endfu
 
 " depreciated
@@ -1512,13 +1966,14 @@ function! s:DoGetMemberListFromTags(class)
   return result
 endfunction
 
+" package information							{{{2
+
 function! s:DoGetPackageList(class, option)
   if has_key(s:cache, a:class)
     return s:cache[a:class]
   endif
 
-  let cmd = 'java -classpath ' . s:GetClassPath() . ' Reflection ' . a:option . ' "' . a:class . '"'
-  let res = s:System(cmd, 's:DoGetPackageList')
+  let res = s:RunReflection(a:option, a:class, 's:DoGetPackageList')
   if len(res) == 0
     return ''
   endif
@@ -1533,6 +1988,8 @@ function! s:DoGetPackageList(class, option)
   endif
   return list
 endfunction
+
+" generate member list							{{{2
 
 fu! s:DoGetFieldList(fields)
   let s = ''
@@ -1654,7 +2111,7 @@ function! s:GetPackageContent(package)
   endif
 
   " local package
-  let srcpath = s:GetSourcePath()
+  let srcpath = sjavacomplete#GetSourcePath(1)
   let s = globpath(srcpath, substitute(a:package, '\.', '/', 'g') . '/*.*')
   if !empty(s)
     let pat = escape(srcpath . a:package, '\') . '.'
@@ -1675,5 +2132,5 @@ function! s:GetPackageContent(package)
   return list
 endfunction
 " }}}
-
+"}}}
 " vim:set fdm=marker sw=2 nowrap:

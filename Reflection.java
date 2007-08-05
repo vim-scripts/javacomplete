@@ -1,11 +1,22 @@
+/**
+ * Reflection.java
+ *
+ * A utility class for javacomplete mainly for reading class or package information.
+ * Version:	0.76
+ * Maintainer:	cheng fang <fangread@yahoo.com.cn>
+ * Last Change:	2007-07-28
+ * Copyright:	Copyright (C) 2007 cheng fang. All rights reserved.
+ * License:	Vim License	(see vim's :help license)
+ * 
+ */
 
 import java.lang.reflect.*;
 import java.io.*;
 import java.util.*;
-import java.util.jar.*;
+import java.util.zip.*;
 
 class Reflection {
-    static final String VERSION	= "0.7";
+    static final String VERSION	= "0.76";
 
     static final int OPTION_FIELD		=  1;
     static final int OPTION_METHOD		=  2;
@@ -44,6 +55,48 @@ class Reflection {
 	return result;
     }
 
+    public static String existedAndRead(String str) {
+	StringBuffer sb = new StringBuffer(1024);
+	sb.append("{");
+
+	int prev = 0;
+	int idx = -1;
+	while ( (idx = str.indexOf(',', idx+1)) != -1 ) {
+	    String fqn = str.substring(prev, idx);
+	    prev = idx+1;
+
+	    try {
+		Class.forName(fqn);
+		sb.append("'" + fqn +"': ").append(getClassInfo(fqn)).append(",");
+	    }
+	    catch (Exception ex) {
+	    }
+	    finally {
+		// it is a package?
+		String s = getPackageList(fqn);
+		if (!s.equals("[]"))
+		    sb.append("'" + fqn +"': ").append(s).append(",");
+	    }
+	}
+	String fqn = str.substring(prev);
+	try {
+	    Class.forName(fqn);
+	    sb.append("'" + fqn +"': ").append(getClassInfo(fqn)).append(",");
+	}
+	catch (Exception ex) {
+	}
+	finally {
+	    // it is a package?
+	    String s = getPackageList(fqn);
+	    if (!s.equals("[]"))
+		sb.append("'" + fqn +"': ").append(s).append(",");
+	}
+
+
+	sb.append("}");
+	return sb.toString();
+    }
+
     public static String getPackageList(String fqn) {
 	fqn = fqn.replace('.', '/') + "/";
 	StringBuffer sb = new StringBuffer(1024);
@@ -77,9 +130,9 @@ class Reflection {
 
     public static void appendListFromJar(StringBuffer sb, String fqn, String path) {
 	try {
-	    for (Enumeration entries = new JarFile(path).entries(); entries.hasMoreElements(); ) {
-		JarEntry jarEntry = (JarEntry)entries.nextElement();
-		String entry = jarEntry.toString();
+	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
+		ZipEntry zipEntry = (ZipEntry)entries.nextElement();
+		String entry = zipEntry.toString();
 		if (entry.indexOf('$') == -1 && entry.endsWith(".class")
 			&& entry.startsWith(fqn)) {
 		    int splitPos = entry.indexOf('/', fqn.length());
@@ -175,7 +228,7 @@ class Reflection {
 	    sb.append("], ").append(NEWLINE);
 	}
 	catch (Exception ex) {
-	    ex.printStackTrace();
+	    //ex.printStackTrace();
 	}
 	//return "[\"-- String --\", \"abd\", {\"word\" : \"method\", \"abbr\" : \"m\", \"menu\" : \"miii\", \"info\" : \"method information \", \"kind\" : \"f\"}]";
 	sb.append("}");
@@ -217,13 +270,15 @@ class Reflection {
 
 
     private static void usage() {
-	System.out.println("Reflection for JAVim (" + VERSION + ")");
-	System.out.println("  java [-classpath] Reflection [-c] [-d] [-h] [-v] [-p] [-s] classname");
+	System.out.println("Reflection for javacomplete (" + VERSION + ")");
+	System.out.println("  java [-classpath] Reflection [-c] [-d] [-e] [-h] [-v] [-p] [-s] classname");
 	System.out.println("Options:");
 	System.out.println("  -a	list all members in alphabetic order");
 	System.out.println("  -c	list constructors");
 	System.out.println("  -C	return class info");
 	System.out.println("  -d	default strategy, i.e. instance fields, instance methods, static fields, static methods");
+	System.out.println("  -e	check class existed");
+	System.out.println("  -E	check class existed and read class information");
 	System.out.println("  -D	debug mode");
 	System.out.println("  -p	list package content");
 	System.out.println("  -P	in same package");
@@ -240,6 +295,7 @@ class Reflection {
 	boolean onlyConstructor = false;
 	boolean listPackageContent = false;
 	boolean checkExisted = false;
+	boolean checkExistedAndRead = false;
 
 	for (int i = 0, n = args.length; i < n && !isBlank(args[i]); i++) {
 	    //debug(args[i]);
@@ -264,10 +320,14 @@ class Reflection {
 		case 'e':	// class existed
 		    checkExisted = true;
 		    break;
+		case 'E':	// check existed and read class information
+		    checkExistedAndRead = true;
+		    break;
 		case 'h':	// help
 		    usage();
 		    return ;
 		case 'v':	// version
+		    System.out.println("Reflection for javacomplete (" + VERSION + ")");
 		    break;
 		case 'p':
 		    listPackageContent = true;
@@ -295,6 +355,8 @@ class Reflection {
 
 	if (wholeClassInfo)
 	    output( getClassInfo(className) );
+	else if (checkExistedAndRead)
+	    output( existedAndRead(className) );
 	else if (checkExisted)
 	    output( String.valueOf(existed(className)) );
 	else if (listPackageContent)
