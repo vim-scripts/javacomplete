@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 4
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 8
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -147,11 +147,11 @@ Note that '|' indicates cursor position
 2. Set java launcher (default 'java') using the following function:
 	javacomplete#SetJVMLauncher('java')	*javacomplete-launcher*
 
-3. Set classpath using the following function:
+3. Set classpath using the following function: >
 	javacomplete#AddClassPath('jarfile_or_classes_path')
 	javacomplete#DelClassPath('jarfile_or_classes_path')
 	javacomplete#SetClassPath('semicolon_separated_string')
-
+<
     Another two variables will be used if they are existing:
 	|g:java_classpath|	global classpath
 	|b:classpath|		associated with current buffer
@@ -258,6 +258,18 @@ The embedded parser works a bit slower than expected.
 6. History					*javacomplete-history*
 
 6.1 javacomplete				*javacomplete-history*
+v0.76.2
+    2007-08-08
+    -	Fix failing to list members of nested class.
+    -	Combine members of local packages and loadable packages.
+    -	Add quick recognition of package or import. 
+    2007-08-06	Add inherited fields and methods to local class.
+
+v0.76.1
+    2007-08-04
+    -	Fix using a: in javacomplete#SetClassPath()
+    -	Fix a bug in javacomplete#GetClassPath()
+
 v0.76 2007-08-04
     2007-08-04
     -	Fix a infinite loop bug in s:GetMatchedIndexEx()
@@ -302,6 +314,10 @@ v0.50 2007-01-21	Use java and Reflection.class directly.
 
 6.2 Parser					*java-parser-history*
 
+v0.62 2007-08-08
+    2007-08-08	Fix values in s:Flags and s:modifiersOpt() and the related.
+    2007-08-07	Optimize code of scanDoubleQuote() and importDeclaration().
+
 v0.61 2007-08-04
     2007-08-01 Fix a bug typetag(). return a:token -> return tolower(a:token)
     2007-07-31
@@ -324,8 +340,11 @@ v0.50 2007-02-10	Complete the skeleton.
 
 6.3 Reflection.java			*javacomplete-reflection*
 
+v0.76.2
+    2007-08-06	Return a modifier value as a string because it more than 32bit.
+
 v0.76
-    2007-08-04	Add check and read package content for '-E'.
+    2007-08-04	Support checking and reading package members for '-E'.
     2007-08-02
     -	Add an option '-E'.
     -	Use ZipFile and ZipEntry instead of JarFile and JarEntry,

@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-04
-" Version:	0.61
+" Last Changed: 2007-08-08
+" Version:	0.62
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.61'
+let g:loaded_javaparser = 'v0.62'
 
 
 " Constants used by scanner and parser					{{{1
@@ -20,7 +20,7 @@ let s:keywords = {'+': 'PLUS', '-': 'SUB', '!': 'BANG', '%': 'PERCENT', '^': 'CA
 let s:tokens = {'(': 'LPAREN', ')': 'RPAREN', '[': 'LBRACKET', ']': 'RBRACKET', '{': 'LBRACE', '}': 'RBRACE', '.': 'DOT', ',': 'COMMA', ';': 'SEMI'}
 let s:modifier_keywords = ['public', 'private', 'protected', 'static', 'final', 'synchronized', 'volatile', 'transient', 'native', 'interface', 'strictfp', 'abstract']
 
-let s:Flags = {'PUBLIC': 0x0000, 'PRIVATE': 0x0001, 'PROTECTED': 0x0002, 'STATIC': 0x0004, 'FINAL': 0x0008, 'SYNCHRONIZED': 0x0010, 'VOLATILE': 0x0020, 'TRANSIENT': 0x0040, 'NATIVE': 0x0080, 'INTERFACE': 0x0100, 'ABSTRACT': 0x0200, 'STRICTFP': 0x0400, 'SYNTHETIC': 0x0800, 'ANNOTATION': 0x1000, 'ENUM': 0x2000, 'StandardFlags': 0x0fff, 'ACC_SUPER': 0x0020, 'ACC_BRIDGE': 0x0040, 'ACC_VARARGS': 0x0080, 'DEPRECATED': 0x00010000, 'HASINIT': 0x00020000, 'BLOCK': 0x00080000, 'IPROXY': 0x00100000, 'NOOUTERTHIS': 0x00200000, 'EXISTS': 0x00400000, 'COMPOUND': 0x00800000, 'CLASS_SEEN': 0x01000000, 'SOURCE_SEEN': 0x02000000, 'LOCKED': 0x04000000, 'UNATTRIBUTED': 0x08000000, 'ANONCONSTR': 0x10000000, 'ACYCLIC': 0x20000000, 'BRIDGE': 0x40000000, 'PARAMETER': 0x0100000000, 'VARARGS': 0x0200000000, 'ACYCLIC_ANN': 0x0400000000, 'GENERATEDCONSTR': 0x0800000000, 'HYPOTHETICAL': 0x1000000000, 'PROPRIETARY': 0x2000000000}
+let s:Flags = {'PUBLIC': 0x1, 'PRIVATE': 0x2, 'PROTECTED': 0x4, 'STATIC': 0x8, 'FINAL': 0x10, 'SYNCHRONIZED': 0x20, 'VOLATILE': 0x30, 'TRANSIENT': 0x80, 'NATIVE': 0x100, 'INTERFACE': 0x200, 'ABSTRACT': 0x400, 'STRICTFP': 0x800, 'SYNTHETIC': 0x1000, 'ANNOTATION': 0x2000, 'ENUM': 	0x4000, 'StandardFlags':0x0fff, 'ACC_SUPER': 0x20, 'ACC_BRIDGE': 0x40, 'ACC_VARARGS': 0x80, 'DEPRECATED': 0x20000, 'HASINIT': 0x40000, 'BLOCK': 0x100000, 'IPROXY': 0x200000, 'NOOUTERTHIS': 0x400000, 'EXISTS': 0x800000, 'COMPOUND': 0x1000000, 'CLASS_SEEN': 0x2000000, 'SOURCE_SEEN': 0x4000000, 'LOCKED': 0x8000000, 'UNATTRIBUTED': 0x10000000, 'ANONCONSTR': 0x20000000, 'ACYCLIC': 0x40000000, 'BRIDGE': 1.repeat('0', 31), 'PARAMETER': 1.repeat('0', 33), 'VARARGS': 1.repeat('0', 34), 'ACYCLIC_ANN': 1.repeat('0', 35), 'GENERATEDCONSTR': 1.repeat('0', 36), 'HYPOTHETICAL': 1.repeat('0', 37), 'PROPRIETARY': 1.repeat('0', 38)}
 
 " API								{{{1
 
@@ -134,6 +134,10 @@ endfu
 
 fu! java_parser#expression()
   return s:expression()
+endfu
+
+fu! java_parser#nextToken()
+  return s:nextToken()
 endfu
 
 
@@ -835,17 +839,33 @@ fu! s:scanSingleQuote()
 endfu
 
 " scan double quote							{{{2
+" test cases:
+"	'a"";'
+"	'a"b,c";'
+"	'a"b,\"c";'
+"	'a"b,\\"c";'
+"	'a"b,\\\"c";'
+"	'a"b,\\\\"c";'
+"	'a"b,\\\"c;'	" NOTE: cannot handle
 fu! s:scanDoubleQuote()
+  if match(b:lines[b:line], '\\"', b:col) == -1
+    let idx = matchend(b:lines[b:line], '\(\\\(["\\''ntbrf]\)\|[^"]\)*"', b:col)
+    if idx != -1
+      let b:sbuf = strpart(b:lines[b:line], b:col, idx-b:col-1)
+      let b:col = idx-1	" back to the end 
+      let b:bp = b:idxes[b:line] + b:col
+      call s:scanChar()
+      let b:token = 'STRINGLITERAL'
+    else
+      call s:LexError("unclosed.str.lit")
+    endif
+    call s:scanChar()
+    return
+  endif
+
+
   call s:scanChar()
-  while b:ch != '"' && b:ch !~ '[\r\n]' && b:bp < b:buflen
-    " OAO: avoid '\"', '\\\"'
-    "let idx = stridx(b:lines[b:line], '"', b:col)
-    "if idx > -1
-    "  let b:col = idx
-    "  let b:bp = b:idxes[b:line] + b:col
-    "  call s:scanChar()
-    "endif
-    " OLD
+  while b:ch !~ '["\r\n]' && b:bp < b:buflen
     call s:scanLitChar()
   endwhile
 
@@ -1050,27 +1070,6 @@ fu! s:Pos2Str(pos)
   return '(' . (o.line+1) . ',' . (o.col+1) . ')'
 endfu
 
-" java function emulations						{{{1
-"fu! IsJavaIdentifierPart()
-"endfu
-
-
-" 
-fu! s:Modifier2String(mod)
-endfu
-
-fu! s:String2Modifier(str)
-  let mod = [0,0,0,0,0,0,0,0,0,0,0,0,]
-  let i = 1
-  while i <= len(s:modifier_keywords)
-      if a:str =~? s:modifier_keywords[i-1]
-	  let mod[-i] = '1'
-      endif
-      let i += 1
-  endwhile
-  return join(mod, '')
-endfu
-
 " Bitwise operator emulators						{{{1
 " NOTE: For more than 32 bit number, use the string bits form.
 
@@ -1202,9 +1201,8 @@ endfu
 
 " helper function: convert a number to a string consisted of '0' or '1' indicating number
 fu! s:Number2Bits(n, ...)
-  if a:n == 0
-    return '0'
-  endif
+  if type(a:n) == type("") | return a:n | endif
+  if a:n == 0 | return '0' | endif
 
   let n = a:n
   let bits = ''
@@ -1215,11 +1213,7 @@ fu! s:Number2Bits(n, ...)
     let n = (n-bit)/ 2
   endwhile
   if a:0 > 0
-    let preserved = a:1 - len(bits)
-    while preserved > 0
-      let bits = '0' . bits
-      let preserved -= 1
-    endwhile
+    let bits = repeat(a:1 - len(bits)) . bits
   endif
   return bits
 endfu
@@ -2569,7 +2563,7 @@ fu! s:statement()
 	let t.detail = s:expression()
       endif
       call s:accept('SEMI')
-      let.endpos = b:pos
+      let t.endpos = b:pos
       return t
     "endif
 
@@ -2593,7 +2587,9 @@ fu! s:catchClause()
   let pos = b:pos
   call s:accept('CATCH')
   call s:accept('LPAREN')
-  let formal = s:variableDeclaratorId(s:optFinal('PARAMETER'), s:qualident())
+  let mods = s:modifiersOpt()
+  let mods.flags = s:BitOr_binary(s:Number2Bits(mods.flags), s:Flags.PARAMETER)
+  let formal = s:variableDeclaratorId(mods, s:qualident())
   call s:accept('RPAREN')
   let body = s:block()
   return {'tag': 'CATCH', 'pos': pos, 'endpos': b:pos, 'param': formal, 'body': body}
@@ -2665,56 +2661,55 @@ endfu
 "		| NATIVE | SYNCHRONIZED | TRANSIENT | VOLATILE | "@"
 "		| "@" Annotation
 " NOTE: flags is a string, not a long number
-" TODO:
 fu! s:modifiersOpt(...)
   let partial = a:0 == 0 ? {} : a:1
 
-  let flags = partial == {} ? '' : partial.flags
+  let flags = partial == {} ? 0 : partial.flags
   let annotations = partial == {} ? [] : partial.annotations
   " TODO: deprecatedFlag
 
   let pos = b:pos
   let lastPos = -1
   while 1
-    let flag = ''
+    let flag = 0
     if b:token =~# '^\(PUBLIC\|PROTECTED\|PRIVATE\|STATIC\|ABSTRACT\|FINAL\|NATIVE\|SYNCHRONIZED\|TRANSIENT\|VOLATILE\|STRICTFP\|MONKEYS_AT\)$'
-      let flag = b:token
+      let flag = b:token == 'MONKEYS_AT' ? s:Flags.ANNOTATION : get(s:Flags, b:token, 0)
     else
       break
     endif
-    call s:nextToken()
-    let lastPos = b:bp
+    if s:BitAnd(flags, flag) != 0
+      "log.error(S.pos(), "repeated.modifier")
+    endif
 
-    if flag == 'MONKEYS_AT'
+    let lastPos = b:pos
+    call s:nextToken()
+
+    if flag == s:Flags.ANNOTATION
       "call s:checkAnnotations()
       if b:token != 'INTERFACE'
 	let ann = s:annotation(lastPos)
-	if flags == '' && annotations == []
+	if flags == 0 && annotations == []
 	  let pos = ann.pos
 	endif
 	call add(annotations, ann)
 	let lastPos = ann.pos
-	let flag = ''
+	let flag = 0
       endif
     endif
-    let flags .= flag . ' '
+    let flags = s:BitOr(flags, flag)
   endwhile
 
   if b:token == 'ENUM'
-    let flags .= ' ENUM'
+    let flags = s:BitOr(flags, s:Flags.ENUM)
   elseif b:token == 'INTERFACE'
-    let flags .= ' INTERFACE'
+    let flags = s:BitOr(flags, s:Flags.INTERFACE)
   endif
 
-  if flags == '' && empty(annotations)
+  if flags == 0 && empty(annotations)
     let pos = -1
   endif
 
-  "if pos == -1 && flags == '' && annotations == []
-  "  return {}
-  "else
-    return {'tag': 'MODIFIERS', 'pos': pos, 'flags': flags, 'annotations': annotations}
-  "endif
+  return {'tag': 'MODIFIERS', 'pos': pos, 'flags': flags, 'annotations': annotations}
 endfu
 
 " Annotation = "@" Qualident [ "(" AnnotationFieldValues ")" ] 		{{{2
@@ -2800,8 +2795,9 @@ fu! s:annotationsOpt()
 
   let buf = []
   while b:token != 'MONKEYS_AT'
+    let pos = b:pos
     call s:nextToken()
-    call add(def, s:annotation(b:bp))
+    call add(buf, s:annotation(pos))
   endwhile
   return buf
 endfu
@@ -2863,6 +2859,17 @@ endfu
 " ImportDeclaration = IMPORT [ STATIC ] Ident { "." Ident } [ "." "*" ] ";"	{{{2
 " return fqn
 fu! s:importDeclaration()
+  " OAO: Usualy it is in one line.
+  let idx = matchend(b:lines[b:line], '\(\s\+static\>\)\?\s\+\([_$a-zA-Z][_$a-zA-Z0-9_]*\)\(\s*\.\s*[_$a-zA-Z][_$a-zA-Z0-9_]*\)*\(\s*\.\s*\*\)\?;')
+  if idx != -1
+    let fqn = strpart(b:lines[b:line], b:col, idx-b:col-1)
+    let b:col = idx-1
+    let b:bp = b:idxes[b:line] + b:col
+    call s:nextToken()
+    return fqn
+  endif
+
+
   call s:Info('==import==')
   let pos = b:bp	" FIXME
   call s:nextToken()
@@ -2904,20 +2911,10 @@ endfu
 
 " TypeDeclaration = ClassOrInterfaceOrEnumDeclaration | ";"	{{{2
 fu! s:typeDeclaration(mods)
-  " XXX handle wrong case
-"  if b:bp == b:errPos
-"    let flags = s:modifiersOpt()
-"    while b:token != 'CLASS' && b:token != 'INTERFACE' && b:token != 'EOF'
-"      call s:nextToken()
-"      let flags = s:modifiersOpt()
-"    endwhile
-"  endif
-
-
   let pos = b:pos
   if a:mods == {} && b:token == 'SEMI'
     call s:nextToken()
-    return {'tag': 'SKIP', 'pos': pos}	" s:block(b:pos, 0)
+    return {'tag': 'SKIP', 'pos': pos}
   else
     let dc = b:docComment
     let mods = s:modifiersOpt(a:mods)
@@ -3060,7 +3057,7 @@ fu! s:enumeratorDeclaration(enumName)
   let annotations = s:annotationsOpt()
   let vardef.mods = s:Modifiers(pos, flags, annotations)
   let vardef.mods.pos = empty(annotations) ? -1 : pos
-  let vardef.m = s:String2Modifier(flags)
+  let vardef.m = s:Number2Bits(flags)
 
   let typeArgs = s:typeArgumentsOpt()
   let identPos = b:pos
@@ -3205,7 +3202,7 @@ fu! s:methodDeclaratorRest(pos, mods, type, name, typarams, isInterface, isVoid,
   let time = reltime()
   let methoddef = {'tag': 'METHODDEF', 'pos': a:pos, 'name': a:name, 'mods': a:mods, 'restype': a:type, 'typarams': a:typarams}
   let methoddef.n = a:name
-  let methoddef.m = s:String2Modifier(a:mods.flags)
+  let methoddef.m = s:Number2Bits(a:mods.flags)
   let methoddef.r = java_parser#type2Str(a:type)
 
   " parameters
@@ -3286,7 +3283,7 @@ endfu
 fu! s:variableDeclaratorRest(pos, mods, type, name, reqInit, dc)
   let vardef = s:VarDef(a:pos, a:mods, a:name, s:bracketsOpt(a:type))
   let vardef.n = vardef.name
-  let vardef.m = s:String2Modifier(a:mods.flags)
+  let vardef.m = s:Number2Bits(a:mods.flags)
   let vardef.t = java_parser#type2Str(vardef.vartype)
 
   if b:token == 'EQ'
@@ -3310,7 +3307,7 @@ fu! s:variableDeclaratorId(mods, type)
   let type = a:type
   let pos = b:pos
   let name = s:ident()
-  if s:BitAnd(a:mods.flags, s:Flags.VARARGS) == 0		" FIXME: VARARGS is long type, more than the 32bit number in vim.
+  if s:BitAnd_binary(a:mods.flags, s:Flags.VARARGS) == 0
     let type = s:bracketsOpt(type)
   endif
   return s:VarDef(pos, a:mods, name, type)
@@ -3359,12 +3356,15 @@ endfu
 " FormalParameterListNovarargs = [ FormalParameterListNovarargs , ] FormalParameter
 fu! s:formalParameters()
   let params = []
+  let lastParam = {}
   call s:accept('LPAREN')
   if b:token != 'RPAREN'
-    call add(params, s:formalParameter())
-    while b:token == 'COMMA'
+    let lastParam = s:formalParameter()
+    call add(params, lastParam)
+    while b:token == 'COMMA' && s:BitOr_binary(lastParam.mods.flags, s:Flags.VARARGS) == 0
       call s:nextToken()
-      call add(params, s:formalParameter())
+      let lastParam = s:formalParameter()
+      call add(params, lastParam)
     endwhile
   endif
   call s:accept('RPAREN')
@@ -3382,18 +3382,14 @@ endfu
 
 fu! s:formalParameter()
   " optional FINAL
-  let mods = s:optFinal(s:Flags.PARAMETER)
-"  let flags = ''
-"  if b:token == 'FINAL'
-"    let vardef.m = s:String2Modifier('final')
-"    call s:nextToken()
-"  endif
+  let mods = s:modifiersOpt()
+  let mods.flags = s:BitOr_binary(s:Number2Bits(mods.flags), s:Flags.PARAMETER)
 
   let type = s:type()
 
   if b:token == 'ELLIPSIS'
     " checkVarargs()
-    let mods.flags = s:BitOr(mods.flags, s:Flags.VARARGS)	" VARARGS   = 1L<<34
+    let mods.flags = s:BitOr_binary(mods.flags, s:Flags.VARARGS)
     let type = s:TypeArray(b:pos, type)
     call s:nextToken()
   endif

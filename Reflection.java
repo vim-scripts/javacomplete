@@ -2,9 +2,9 @@
  * Reflection.java
  *
  * A utility class for javacomplete mainly for reading class or package information.
- * Version:	0.76
+ * Version:	0.76.2
  * Maintainer:	cheng fang <fangread@yahoo.com.cn>
- * Last Change:	2007-07-28
+ * Last Change:	2007-08-08
  * Copyright:	Copyright (C) 2007 cheng fang. All rights reserved.
  * License:	Vim License	(see vim's :help license)
  * 
@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.zip.*;
 
 class Reflection {
-    static final String VERSION	= "0.76";
+    static final String VERSION	= "0.76.2";
 
     static final int OPTION_FIELD		=  1;
     static final int OPTION_METHOD		=  2;
@@ -236,7 +236,7 @@ class Reflection {
     }
 
     private static void appendModifier(StringBuffer sb, int modifier) {
-	sb.append(KEY_MODIFIER).append(Integer.toString(modifier, 2)).append(", ");
+	sb.append(KEY_MODIFIER).append("'").append(Integer.toString(modifier, 2)).append("', ");
     }
 
     private static void appendParameterTypes(StringBuffer sb, Class[] paramTypes) {

@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76
+" Version:	0.76.2
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-04
+" Last Change:	2007-08-08
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -13,6 +13,7 @@ let s:CONTEXT_AFTER_DOT		= 1
 let s:CONTEXT_METHOD_PARAM	= 2
 let s:CONTEXT_IMPORT		= 3
 let s:CONTEXT_INCOMPLETE_WORD	= 4
+let s:CONTEXT_PACKAGE_DECL	= 5
 let s:CONTEXT_OTHER 		= 0
 
 
@@ -85,10 +86,17 @@ function! javacomplete#Complete(findstart, base)
       return -1
     endif
 
-    " import statement
-    if statement =~ '^\s*import\s\+'
-      let b:context_type = s:CONTEXT_IMPORT
-      let b:dotexpr = substitute(statement, '^\s*import\s\+\(static\s\+\)\?', '', '')
+    " import or package declaration
+    if statement =~ '^\s*\(import\|package\)\s\+'
+      let statement = substitute(statement, '\s\+\.', '.', 'g')
+      let statement = substitute(statement, '\.\s\+', '.', 'g')
+      if statement =~ '^\s*import\s\+'
+	let b:context_type = s:CONTEXT_IMPORT
+	let b:dotexpr = substitute(statement, '^\s*import\s\+\(static\s\+\)\?', '', '')
+      else
+	let b:context_type = s:CONTEXT_PACKAGE_DECL
+	let b:dotexpr = substitute(statement, '\s*package\s\+', '', '')
+      endif
 
       let idx_dot = strridx(b:dotexpr, '.')
       " case: " import 	java.util.|"
@@ -209,6 +217,8 @@ function! javacomplete#Complete(findstart, base)
       let result = s:CompleteAfterDot()
     elseif b:context_type == s:CONTEXT_IMPORT
       let result = s:GetPackageContent(b:dotexpr)
+    elseif b:context_type == s:CONTEXT_PACKAGE_DECL
+      let result = s:GetPackageContent(b:dotexpr, 1)
     elseif b:context_type == s:CONTEXT_METHOD_PARAM
       if b:incomplete == 'new'
 	let fqn = s:GetFQN(b:dotexpr)
@@ -245,7 +255,7 @@ function! s:CompleteAfterDot()
   let expr = s:Trim(expr)	" trim head and tail spaces
 
   " 0. String literal
-  call s:Info('S0. "str".|')
+  call s:Info('P0. "str".|')
   if expr =~  '"$'
     return s:GetMemberList("java.lang.String")
   endif
@@ -273,19 +283,7 @@ function! s:CompleteAfterDot()
       elseif s:IsBuiltinType(class)
 	return []
       else
-	let list = s:GetMemberList(class)
-	if !empty(list)
-	  return list
-	endif
-	return []		" FIXME
-      " class in current project, including current file or files in current folder
-"      elseif globpath(expand('%:p:h'), class . '.java') != ''
-"	return s:GetMemberListFromLocalClass(class)
-"      else
-"	let fqn = s:GetFQN(class)
-"	if fqn != ''
-"	  return s:GetMemberList(fqn)
-"	endif
+	return s:GetMemberList(class)
       endif
     endif
 
@@ -440,6 +438,10 @@ endfunction
 " Return: statement before cursor
 " Note: It's the base for parsing. And It's OK for most cases.
 function! s:GetStatement()
+  if getline('.') =~ '^\s*\(import\|package\)\s\+'
+    return strpart(getline('.'), match(getline('.'), '\(import\|package\)'), col('.')-1)
+  endif
+
   let lnum_old = line('.')
   let col_old = col('.')
 
@@ -458,23 +460,20 @@ endfunction
 
 fu! s:MergeLines(lnum, col, lnum_old, col_old)
   let lnum = a:lnum
-  let col = a:col
-  let lnum_old = a:lnum_old
-  let col_old = a:col_old
-  "echoerr 'lnum_old ' . lnum_old . ' col_old: ' . col_old . ' lnum: ' . lnum. ' col: ' . col
+  "echoerr 'lnum_old ' . a:lnum_old . ' col_old: ' . a:col_old . ' lnum: ' . lnum. ' col: ' . a:col
 
   " Merge lines into a string, and remove comments, trim spaces
-  if lnum == lnum_old
-    let str = substitute(strpart(getline(lnum_old), col-1, col_old-col), '^\s*', '', '')
+  if lnum == a:lnum_old
+    let str = substitute(strpart(getline(a:lnum_old), a:col-1, a:col_old-a:col), '^\s*', '', '')
   else
-    let str = s:Prune(strpart(getline(lnum), col-1))
-    let lnum = lnum + 1
-    while (lnum < lnum_old)
+    let str = s:Prune(strpart(getline(lnum), a:col-1))
+    let lnum += 1
+    while lnum < a:lnum_old
       let str = str . s:Prune(getline(lnum))
-      let lnum = lnum + 1
+      let lnum += 1
     endwhile
-    if lnum == lnum_old
-      let str = str . substitute(strpart(getline(lnum_old), 0, col_old-1), '^\s*', '', '')
+    if lnum == a:lnum_old
+      let str = str . substitute(strpart(getline(a:lnum_old), 0, a:col_old-1), '^\s*', '', '')
     endif
   end
   let str = substitute(str, '\s\+', ' ', '')
@@ -780,7 +779,7 @@ function! s:GetNextSubexprType(fqn, expr)
 	endif
       endfor
     endif
-  else
+  elseif type(classinfo) == type({})
     if has_key(classinfo, 'fields')
       for field in classinfo['fields']
 	if field['n'] == next_subexpr
@@ -819,11 +818,7 @@ fu! javacomplete#Searchdecl()
 
   if var =~# '^\(this\|super\)$'
     call javacomplete#parse()
-    let targetPos = java_parser#MakePos(line, col)
-    let matchs = []
-    for type in b:ast.types
-      let matchs += s:SearchTypeAt(type, targetPos)
-    endfor
+    let matchs = s:SearchTypeAt(b:ast, java_parser#MakePos(line, col))
 
     let stat = s:GetStatement()
     for t in matchs
@@ -896,16 +891,20 @@ fu! javacomplete#Searchdecl()
 endfu
 
 fu! s:SearchTypeAt(tree, targetPos)
-  let matchs = []
-  if a:tree.pos <= a:targetPos && a:targetPos <= a:tree.endpos
-    call add(matchs, a:tree)
+  let matches = []
+  if a:tree.tag == 'TOPLEVEL'
+    for type in a:tree.types
+      let matches += s:SearchTypeAt(type, a:targetPos)
+    endfor
+  elseif a:tree.tag == 'CLASSDEF' && (a:targetPos == -1 || a:tree.pos <= a:targetPos && a:targetPos <= get(a:tree, 'endpos', -1))
+    call add(matches, a:tree)
     for def in a:tree.defs
       if def.tag == 'CLASSDEF'
-	let matchs += s:SearchTypeAt(def, a:targetPos)
+	let matches += s:SearchTypeAt(def, a:targetPos)
       endif
     endfor
   endif
-  return matchs
+  return matches
 endfu
 
 " precondition: name must exists in unit.
@@ -1067,15 +1066,9 @@ function! s:GetFQN(name)
     endif
   endfor
 
-  " 看本地及sourcepath是否有该类
   call s:Debug('GetFQN: to check case 3: a class in this buffer, or same package, or sourcepath?')
   call javacomplete#parse()
-  let targetPos = java_parser#MakePos(line('.')-1, col('.')-1)
-  let matchs = []
-  for type in b:ast.types
-    let matchs += s:SearchTypeAt(type, targetPos)
-  endfor
-  for t in matchs
+  for t in s:SearchTypeAt(b:ast, -1)
     if t.name == a:name
       return a:name
     endif
@@ -1210,6 +1203,7 @@ fu! javacomplete#AddSourcePath(s)
   for i in s:sourcepath
     if i == a:s
       let found = 1
+      break
     endif
   endif
   if !found
@@ -1523,6 +1517,10 @@ fu! s:Searchdecl(name, ...)
 endfu
 "nmap <F8> :call <SID>Searchdecl(expand('<cword>'))<CR>
 
+fu! javacomplete#Exe(cmd)
+  exe a:cmd
+endfu
+
 " Log utilities								{{{1
 fu! s:WatchVariant(variant)
   "echoerr a:variant
@@ -1618,12 +1616,7 @@ fu! s:DoGetClassInfo(class, ...)
   if a:class =~# '^\(this\|super\)$'
     call s:Info('A0. ' . a:class)
     call javacomplete#parse()
-    let targetPos = java_parser#MakePos(line('.')-1, col('.')-1)
-    let matchs = []
-    for type in b:ast.types
-      let matchs += s:SearchTypeAt(type, targetPos)
-    endfor
-
+    let matchs = s:SearchTypeAt(b:ast, java_parser#MakePos(line('.')-1, col('.')-1))
     let t = {}
     let stat = s:GetStatement()
     for m in matchs
@@ -1636,26 +1629,18 @@ fu! s:DoGetClassInfo(class, ...)
       let t = matchs[len(matchs)-1]
     endif
     if !empty(t)
+      " What will be returned for super?
+      " - the protected or public inherited fields and methods. No ctors.
+      " - the (public static) fields of interfaces.
+      " - the methods of the Object class.
+      " What will be returned for this?
+      " - besides the above, all fields and methods of current class. No ctors.
       if a:class == 'this'
-	let ci = s:Tree2ClassInfo(t)
-      elseif a:class == 'super'
-	let list = []
-	if len(t.extends) > 0
-	  call add(list, java_parser#type2Str(t.extends[0]))
-	endif
-	if has_key(t, 'implements')
-	  for i in t.implements
-	    call add(list, java_parser#type2Str(i))
-	  endfor
-	endif
-	for id in list
-	  let fqn = s:GetFQN(id)
-	  if fqn != ''
-	    let ci = s:MergeClassInfo(ci, s:DoGetClassInfo(fqn))
-	  endif
-	endfor
-	call s:Sort(ci)
+	let ci = s:AddInheritedClassInfo(s:Tree2ClassInfo(t), t)
+      else
+	let ci = s:AddInheritedClassInfo({}, t)
       endif
+      call s:Sort(ci)
     endif
     return ci
   endif
@@ -1800,13 +1785,11 @@ fu! s:GetLocalClassInfo(class, filename)
 endfu
 
 fu! s:DoGetLocalClassInfo(class, unit)
-  if has_key(a:unit, 'types')
-    for t in a:unit['types']
-      if t['name'] == a:class
-	return s:Tree2ClassInfo(t)
-      endif
-    endfor
-  endif
+  for t in s:SearchTypeAt(a:unit, -1)
+    if t.name == a:class
+      return s:AddInheritedClassInfo(s:Tree2ClassInfo(t), t)
+    endif
+  endfor
   return {}
 endfu
 
@@ -1823,6 +1806,28 @@ fu! s:Tree2ClassInfo(t)
     endif
   endfor
   return t
+endfu
+
+fu! s:AddInheritedClassInfo(ci, t)
+  let t = a:t
+  let ci = a:ci
+  " add inherited fields and methods
+  let list = []
+  if has_key(t, 'extends')
+    call add(list, java_parser#type2Str(t.extends[0]))
+  endif
+  if has_key(t, 'implements')
+    for i in t.implements
+      call add(list, java_parser#type2Str(i))
+    endfor
+  endif
+  for id in list
+    let fqn = s:GetFQN(id)
+    if fqn != ''
+      let ci = s:MergeClassInfo(ci, s:DoGetClassInfo(fqn))
+    endif
+  endfor
+  return ci
 endfu
 
 " depreciated
@@ -2104,29 +2109,28 @@ function! s:GetConstructorList(fqn, class)
   return list
 endfunction
 
-function! s:GetPackageContent(package)
+" Optional argument means no class needed.
+function! s:GetPackageContent(package, ...)
   let list = s:DoGetPackageList(a:package, '-p')
-  if !empty(list)
-    return list
-  endif
 
   " local package
-  let srcpath = sjavacomplete#GetSourcePath(1)
-  let s = globpath(srcpath, substitute(a:package, '\.', '/', 'g') . '/*.*')
+  let srcpath = javacomplete#GetSourcePath(1)
+  let srcpath = substitute(srcpath, '[\\/]\?' . javacomplete#GetClassPathSep(), ',', 'g')
+  let srcpath = substitute(srcpath, '[\\/]\?$', '', 'g')
+  let s = globpath(srcpath, substitute(a:package, '\.', '/', 'g') . '/*')
   if !empty(s)
-    let pat = escape(srcpath . a:package, '\') . '.'
-    let list = []
+    let pathes = split(srcpath, ',')
     for f in split(s, "\n")
-      if isdirectory(f)
-	let str = substitute(f, pat, '', '')
-	if str != 'CVS'
-	  call add(list, str)
+      for path in pathes
+	let idx = matchend(f, escape(path, '\') . '[\\/]\?' . a:package . '[\\/]')
+	if idx != -1
+	  if isdirectory(f) && f !~ 'CVS$'
+	    call add(list, strpart(f, idx))
+	  elseif f =~ '\.java$' && a:0 == 0
+	    call add(list, substitute(strpart(f, idx), '\.java$', '', ''))
+	  endif
 	endif
-      elseif f =~ '\.java$'
-	let str = substitute(f, pat, '', '')
-	let str = substitute(str, '\.java$', '', '')
-	call add(list, str)
-      endif
+      endfor
     endfor
   endif
   return list
