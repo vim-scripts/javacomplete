@@ -2,9 +2,9 @@
  * Reflection.java
  *
  * A utility class for javacomplete mainly for reading class or package information.
- * Version:	0.76.2
+ * Version:	0.76.3
  * Maintainer:	cheng fang <fangread@yahoo.com.cn>
- * Last Change:	2007-08-08
+ * Last Change:	2007-08-10
  * Copyright:	Copyright (C) 2007 cheng fang. All rights reserved.
  * License:	Vim License	(see vim's :help license)
  * 
@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.zip.*;
 
 class Reflection {
-    static final String VERSION	= "0.76.2";
+    static final String VERSION	= "0.76.3";
 
     static final int OPTION_FIELD		=  1;
     static final int OPTION_METHOD		=  2;
@@ -32,6 +32,8 @@ class Reflection {
     static final int STRATEGY_ALPHABETIC	= 128;
     static final int STRATEGY_HIERARCHY		= 256;
     static final int STRATEGY_DEFAULT		= 512;
+
+    static final int RETURN_ALL_PACKAGE_INFO	= 0x1000;
 
     static final String KEY_NAME		= "'n':";	// "'name':";
     static final String KEY_TYPE		= "'t':";	// "'type':";
@@ -128,23 +130,91 @@ class Reflection {
 	return sb.toString();
     }
 
+    public static String getPackageList() {
+	Hashtable map = new Hashtable();
+
+	// system classpath
+	String java_home_path = System.getProperty("java.home") + "/lib/";
+	File file = new File(java_home_path);
+	String[] items = file.list();
+	for (int i = 0; i < items.length; i++) {
+	    String path = items[i];
+	    if (path.endsWith(".jar") || path.endsWith(".zip")) {
+		appendListFromJar(java_home_path + path, map);
+	    }
+	}
+
+	// user classpath
+	String classPath = System.getProperty("java.class.path");
+	StringTokenizer st = new StringTokenizer(classPath, ";");
+	while (st.hasMoreTokens()) {
+	    String path = st.nextToken();
+	    if (path.endsWith(".jar") || path.endsWith(".zip"))
+		appendListFromJar(path, map);
+	    else
+		appendListFromFolder(path, map, "");
+	}
+
+	StringBuffer sb = new StringBuffer(4096);
+	sb.append("{");
+	sb.append("'*':'").append( map.remove("") ).append("',");	// default package
+	for (Enumeration e = map.keys(); e.hasMoreElements(); ) {
+	    String s = (String)e.nextElement();
+	    sb.append("'").append( s.replace('/', '.') ).append("':'").append(map.get(s)).append("',");
+	}
+	sb.append("}");
+	return sb.toString();
+
+    }
+
     public static void appendListFromJar(StringBuffer sb, String fqn, String path) {
 	try {
 	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
-		ZipEntry zipEntry = (ZipEntry)entries.nextElement();
-		String entry = zipEntry.toString();
+		String entry = entries.nextElement().toString();
 		if (entry.indexOf('$') == -1 && entry.endsWith(".class")
 			&& entry.startsWith(fqn)) {
 		    int splitPos = entry.indexOf('/', fqn.length());
 		    if (splitPos == -1)
 			splitPos = entry.indexOf(".class",fqn.length());
 		    String descent = entry.substring(fqn.length(),splitPos);
-		    sb.append("'").append(descent).append("',");
+		    if (sb.toString().indexOf("'" + descent + "',") == -1)
+			sb.append("'").append(descent).append("',");
 		    debug(descent);
 		}
 	    }
 	}
 	catch (Throwable e) {
+	}
+    }
+
+    public static void appendListFromJar(String path, Hashtable map) {
+	try {
+	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
+		String entry = entries.nextElement().toString();
+		int len = entry.length();
+		if (entry.endsWith(".class") && entry.indexOf('$') == -1) {
+		    int slashpos = entry.lastIndexOf('/');
+		    AddToParent(map, entry.substring(0, slashpos), entry.substring(slashpos+1, len-6));
+		}
+	    }
+	}
+	catch (Throwable e) {
+	    //e.printStackTrace();
+	}
+    }
+
+    public static void AddToParent(Hashtable map, String parent, String child) {
+	StringBuffer sb = (StringBuffer)map.get(parent);
+	if (sb == null) {
+	    sb = new StringBuffer(256);
+	}
+	if (sb.toString().indexOf(child + ",") == -1)
+	    sb.append(child).append(",");
+	map.put(parent, sb);
+
+	int slashpos = parent.lastIndexOf('/');
+	if (slashpos != -1) {
+	    AddToParent(map, parent.substring(0, slashpos), parent.substring(slashpos+1));
 	}
     }
 
@@ -177,6 +247,31 @@ class Reflection {
 	}
     }
 
+    public static void appendListFromFolder(String path, Hashtable map, String fqn) {
+	try {
+	    File file = new File(path);
+	    if (file.isDirectory()) {
+		String[] descents = file.list();
+		for (int i = 0; i < descents.length; i++) {
+		    if (descents[i].indexOf('$') == -1 && descents[i].endsWith(".class")) {
+			StringBuffer sb = (StringBuffer)map.get(fqn);
+			if (sb == null) {
+			    sb = new StringBuffer(256);
+			}
+			sb.append(descents[i].substring(0, descents[i].length()-6)).append(',');
+			map.put(fqn, sb);
+		    }
+		    else {
+			String qn = fqn.length() == 0 ? "" : fqn + ".";
+			appendListFromFolder(path + "/" + descents[i], map, qn + descents[i]);
+		    }
+		}
+	    }
+	}
+	catch (Throwable e) {
+	    //e.printStackTrace();
+	}
+    }
 
     public static String getClassInfo(String className) {
 	StringBuffer sb = new StringBuffer(1024);
@@ -281,7 +376,7 @@ class Reflection {
 	System.out.println("  -E	check class existed and read class information");
 	System.out.println("  -D	debug mode");
 	System.out.println("  -p	list package content");
-	System.out.println("  -P	in same package");
+	System.out.println("  -P	print all package info in the Vim dictionary format");
 	System.out.println("  -s	list static fields and methods");
 	System.out.println("  -h	help");
 	System.out.println("  -v	version");
@@ -296,6 +391,7 @@ class Reflection {
 	boolean listPackageContent = false;
 	boolean checkExisted = false;
 	boolean checkExistedAndRead = false;
+	boolean allPackageInfo = false;
 
 	for (int i = 0, n = args.length; i < n && !isBlank(args[i]); i++) {
 	    //debug(args[i]);
@@ -332,8 +428,8 @@ class Reflection {
 		case 'p':
 		    listPackageContent = true;
 		    break;
-		case 'P':	// same package
-		    option = option | OPTION_SAME_PACKAGE;
+		case 'P':
+		    option = RETURN_ALL_PACKAGE_INFO;
 		    break;
 		case 's':	// request static members
 		    option = option | OPTION_STATIC_METHOD | OPTION_STATIC_FIELD;
@@ -347,7 +443,7 @@ class Reflection {
 		className = args[i];
 	    }
 	}
-	if (className == null) {
+	if (className == null && (option & RETURN_ALL_PACKAGE_INFO) != RETURN_ALL_PACKAGE_INFO) {
 	    return;
 	}
 	if (option == 0x0)
@@ -355,6 +451,8 @@ class Reflection {
 
 	if (wholeClassInfo)
 	    output( getClassInfo(className) );
+	else if ((option & RETURN_ALL_PACKAGE_INFO) == RETURN_ALL_PACKAGE_INFO)
+	    output( getPackageList() );
 	else if (checkExistedAndRead)
 	    output( existedAndRead(className) );
 	else if (checkExisted)

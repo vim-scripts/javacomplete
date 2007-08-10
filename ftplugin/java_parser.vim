@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-08
-" Version:	0.62
+" Last Changed: 2007-08-10
+" Version:	0.63
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,19 +10,19 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.62'
+let g:loaded_javaparser = 'v0.63'
 
 
 " Constants used by scanner and parser					{{{1
 let s:EOI = ''
 
-let s:keywords = {'+': 'PLUS', '-': 'SUB', '!': 'BANG', '%': 'PERCENT', '^': 'CARET', '&': 'AMP', '*': 'STAR', '|': 'BAR', '~': 'TILDE', '/': 'SLASH', '>': 'GT', '<': 'LT', '?': 'QUES', ':': 'COLON', '=': 'EQ', '++': 'PLUSPLUS', '--': 'SUBSUB', '==': 'EQEQ', '<=': 'LTEQ', '>=': 'GTEQ', '!=': 'BANGEQ', '<<': 'LTLT', '>>': 'GTGT', '>>>': 'GTGTGT', '+=': 'PLUSEQ', '-=': 'SUBEQ', '*=': 'STAREQ', '/=': 'SLASHEQ', '&=': 'AMPEQ', '|=': 'BAREQ', '^=': 'CARETEQ', '%=': 'PERCENTEQ', '<<=': 'LTLTEQ', '>>=': 'GTGTEQ', '>>>=': 'GTGTGTEQ', '||': 'BARBAR', '&&': 'AMPAMP', 'abstract': 'ABSTRACT', 'assert': 'ASSERT', 'boolean': 'BOOLEAN', 'break': 'BREAK', 'byte': 'BYTE', 'case': 'CASE', 'catch': 'CATCH', 'char': 'CHAR', 'class': 'CLASS', 'const': 'CONST', 'continue': 'CONTINUE', 'default': 'DEFAULT', 'do': 'DO', 'double': 'DOUBLE', 'else': 'ELSE', 'extends': 'EXTENDS', 'final': 'FINAL', 'finally': 'FINALLY', 'float': 'FLOAT', 'for': 'FOR', 'goto': 'GOTO', 'if': 'IF', 'implements': 'IMPLEMENTS', 'import': 'IMPORT', 'instanceof': 'INSTANCEOF', 'int': 'INT', 'interface': 'INTERFACE', 'long': 'LONG', 'native': 'NATIVE', 'new': 'NEW', 'package': 'PACKAGE', 'private': 'PRIVATE', 'protected': 'PROTECTED', 'public': 'PUBLIC', 'return': 'RETURN', 'short': 'SHORT', 'static': 'STATIC', 'strictfp': 'STRICTFP', 'super': 'SUPER', 'switch': 'SWITCH', 'synchronized': 'SYNCHRONIZED', 'this': 'THIS', 'throw': 'THROW', 'throws': 'THROWS', 'transient': 'TRANSIENT', 'try': 'TRY', 'void': 'VOID', 'volatile': 'VOLATILE', 'while': 'WHILE', 'true': 'TRUE', 'false': 'FALSE', 'null': 'NULL', 'enum': 'ENUM', '...': 'ELLIPSIS', '@': 'MONKEYS_AT'}
-let s:tokens = {'(': 'LPAREN', ')': 'RPAREN', '[': 'LBRACKET', ']': 'RBRACKET', '{': 'LBRACE', '}': 'RBRACE', '.': 'DOT', ',': 'COMMA', ';': 'SEMI'}
-let s:modifier_keywords = ['public', 'private', 'protected', 'static', 'final', 'synchronized', 'volatile', 'transient', 'native', 'interface', 'strictfp', 'abstract']
+let s:keywords = {'+': 'PLUS', '-': 'SUB', '!': 'BANG', '%': 'PERCENT', '^': 'CARET', '&': 'AMP', '*': 'STAR', '|': 'BAR', '~': 'TILDE', '/': 'SLASH', '>': 'GT', '<': 'LT', '?': 'QUES', ':': 'COLON', '=': 'EQ', '++': 'PLUSPLUS', '--': 'SUBSUB', '==': 'EQEQ', '<=': 'LTEQ', '>=': 'GTEQ', '!=': 'BANGEQ', '<<': 'LTLT', '>>': 'GTGT', '>>>': 'GTGTGT', '+=': 'PLUSEQ', '-=': 'SUBEQ', '*=': 'STAREQ', '/=': 'SLASHEQ', '&=': 'AMPEQ', '|=': 'BAREQ', '^=': 'CARETEQ', '%=': 'PERCENTEQ', '<<=': 'LTLTEQ', '>>=': 'GTGTEQ', '>>>=': 'GTGTGTEQ', '||': 'BARBAR', '&&': 'AMPAMP', 'abstract': 'ABSTRACT', 'assert': 'ASSERT', 'boolean': 'BOOLEAN', 'break': 'BREAK', 'byte': 'BYTE', 'case': 'CASE', 'catch': 'CATCH', 'char': 'CHAR', 'class': 'CLASS', 'const': 'CONST', 'continue': 'CONTINUE', 'default': 'DEFAULT', 'do': 'DO', 'double': 'DOUBLE', 'else': 'ELSE', 'extends': 'EXTENDS', 'final': 'FINAL', 'finally': 'FINALLY', 'float': 'FLOAT', 'for': 'FOR', 'goto': 'GOTO', 'if': 'IF', 'implements': 'IMPLEMENTS', 'import': 'IMPORT', 'instanceof': 'INSTANCEOF', 'int': 'INT', 'interface': 'INTERFACE', 'long': 'LONG', 'native': 'NATIVE', 'new': 'NEW', 'package': 'PACKAGE', 'private': 'PRIVATE', 'protected': 'PROTECTED', 'public': 'PUBLIC', 'return': 'RETURN', 'short': 'SHORT', 'static': 'STATIC', 'strictfp': 'STRICTFP', 'super': 'SUPER', 'switch': 'SWITCH', 'synchronized': 'SYNCHRONIZED', 'this': 'THIS', 'throw': 'THROW', 'throws': 'THROWS', 'transient': 'TRANSIENT', 'try': 'TRY', 'void': 'VOID', 'volatile': 'VOLATILE', 'while': 'WHILE', 'true': 'TRUE', 'false': 'FALSE', 'null': 'NULL', '(': 'LPAREN', ')': 'RPAREN', '{': 'LBRACE', '}': 'RBRACE', '[': 'LBRACKET', ']': 'RBRACKET', ';': 'SEMI', ',': 'COMMA', '.': 'DOT', 'enum': 'ENUM', '...': 'ELLIPSIS', '@': 'MONKEYS_AT'}
 
 let s:Flags = {'PUBLIC': 0x1, 'PRIVATE': 0x2, 'PROTECTED': 0x4, 'STATIC': 0x8, 'FINAL': 0x10, 'SYNCHRONIZED': 0x20, 'VOLATILE': 0x30, 'TRANSIENT': 0x80, 'NATIVE': 0x100, 'INTERFACE': 0x200, 'ABSTRACT': 0x400, 'STRICTFP': 0x800, 'SYNTHETIC': 0x1000, 'ANNOTATION': 0x2000, 'ENUM': 	0x4000, 'StandardFlags':0x0fff, 'ACC_SUPER': 0x20, 'ACC_BRIDGE': 0x40, 'ACC_VARARGS': 0x80, 'DEPRECATED': 0x20000, 'HASINIT': 0x40000, 'BLOCK': 0x100000, 'IPROXY': 0x200000, 'NOOUTERTHIS': 0x400000, 'EXISTS': 0x800000, 'COMPOUND': 0x1000000, 'CLASS_SEEN': 0x2000000, 'SOURCE_SEEN': 0x4000000, 'LOCKED': 0x8000000, 'UNATTRIBUTED': 0x10000000, 'ANONCONSTR': 0x20000000, 'ACYCLIC': 0x40000000, 'BRIDGE': 1.repeat('0', 31), 'PARAMETER': 1.repeat('0', 33), 'VARARGS': 1.repeat('0', 34), 'ACYCLIC_ANN': 1.repeat('0', 35), 'GENERATEDCONSTR': 1.repeat('0', 36), 'HYPOTHETICAL': 1.repeat('0', 37), 'PROPRIETARY': 1.repeat('0', 38)}
 
 " API								{{{1
+
+let s:PROTOTYPE = {'s:options': {}, 'b:buf': '', 'b:buflen': 0, 'b:lines': [], 'b:idxes': [0], 'b:bp': -1, 'b:ch': '', 'b:line': 0, 'b:col': 0, 'b:pos': 0, 'b:endPos': 0, 'b:prevEndPos': 0, 'b:errPos': -1, 'b:errorEndPos': -1, 'b:sbuf': '', 'b:name': '', 'b:token': '', 'b:docComment': '', 'b:radix': 0, 'b:unicodeConversionBp': -1, 'b:scanStrategy': 0, 'b:allowGenerics': 1, 'b:allowVarargs': 1, 'b:allowAsserts': 1, 'b:allowEnums': 1, 'b:allowForeach': 1, 'b:allowStaticImport': 1, 'b:allowAnnotations': 1, 'b:keepDocComments': 1, 'b:mode': 0, 'b:lastmode': 0, 'b:log': [], 'b:et_perf': '', 'b:et_nextToken_count': 0}
 
 " Function to initialize the parser
 " parameters:
@@ -91,22 +91,24 @@ fu! java_parser#InitParser(lines, ...)
   call s:nextToken()	" prime the pump
 endfu
 
-fu! java_parser#FreeParser(lines)
-  unlet b:buf
-  unlet b:buflen
-  unlet b:lines
-  unlet b:idxes
-  unlet b:bp
-  unlet b:ch
-  unlet b:line
-  unlet b:col
-  unlet b:endPos
-  unlet b:lastEndPos
-  unlet b:sbuf
-  unlet b:name
-  unlet b:token
-  unlet b:docComment
-  unlet b:log
+fu! java_parser#FreeParser()
+  for varname in keys(s:PROTOTYPE)
+    exe "if exists(" . string(varname) . ") | unlet " . varname . " | endif"
+  endfor
+endfu
+
+fu! java_parser#GetSnapshot()
+  let snapshot = {}
+  for varname in keys(s:PROTOTYPE)
+    exe "let snapshot[" . string(varname) . "] = " . varname
+  endfor
+  return snapshot
+endfu
+
+fu! java_parser#Restore(snapshot)
+  for key in keys(a:snapshot)
+    exe "let " . key . "=" . string(a:snapshot[key])
+  endfor
 endfu
 
 " move b:bp and b:pos to the specified position
@@ -317,7 +319,7 @@ fu! s:nextToken()
       return
 
     elseif b:ch =~ '[,;(){}[\]]'
-      let b:token = s:tokens[b:ch]
+      let b:token = s:keywords[b:ch]
       call s:scanChar()
       return
 
@@ -890,8 +892,8 @@ fu! s:gotoMatchEnd(one, another, ...)
   while b:bp < b:buflen
     if b:ch == a:another
       call s:scanChar()
-      if has_key(s:tokens, a:another)
-	let b:token = s:tokens[a:another]
+      if has_key(s:keywords, a:another)
+	let b:token = s:keywords[a:another]
       else
 	echoerr '<strange>'
       endif
@@ -1368,11 +1370,9 @@ fu! s:accept(token_type)
 endfu
 
 fu! s:token2string(token)
-  for e in items(s:tokens)
-    if e[1] == a:token
-      return "'" . e[0] . "'"
-    endif
-  endfor
+  if a:token =~# '^\(DOT\|COMMA\|SEMI\|LPAREN\|RPAREN\|LBRACKET\|RBRACKET\|LBRACE\|RBRACE\)$'
+    return "'" . a:token . "'"
+  endif
   return a:token
 endfu
 
@@ -2843,7 +2843,7 @@ fu! s:compilationUnit()
       "  def = ((JCExpressionStatement)def).expr
       "endif
       call add(s:types, def)
-      if (def.tag == 'CLASSDEF')
+      if def.tag == 'CLASSDEF'
         let checkForImports = 0
       endif
       let mods = {}
@@ -2860,14 +2860,14 @@ endfu
 " return fqn
 fu! s:importDeclaration()
   " OAO: Usualy it is in one line.
-  let idx = matchend(b:lines[b:line], '\(\s\+static\>\)\?\s\+\([_$a-zA-Z][_$a-zA-Z0-9_]*\)\(\s*\.\s*[_$a-zA-Z][_$a-zA-Z0-9_]*\)*\(\s*\.\s*\*\)\?;')
-  if idx != -1
-    let fqn = strpart(b:lines[b:line], b:col, idx-b:col-1)
-    let b:col = idx-1
-    let b:bp = b:idxes[b:line] + b:col
-    call s:nextToken()
-    return fqn
-  endif
+"  let idx = matchend(b:lines[b:line], '\(\s\+static\>\)\?\s\+\([_$a-zA-Z][_$a-zA-Z0-9_]*\)\(\s*\.\s*[_$a-zA-Z][_$a-zA-Z0-9_]*\)*\(\s*\.\s*\*\)\?;')
+"  if idx != -1
+"    let fqn = strpart(b:lines[b:line], b:col, idx-b:col-1)
+"    let b:col = idx-1
+"    let b:bp = b:idxes[b:line] + b:col
+"    call s:nextToken()
+"    return fqn
+"  endif
 
 
   call s:Info('==import==')
@@ -2903,7 +2903,7 @@ fu! s:importDeclaration()
       let pid = s:Select(pos1, pid, s:ident())
     endif
   endwhile
-  let fqn = Strpart(pos, b:bp-pos-2)
+  let fqn = java_parser#type2Str(pid)
   call s:accept('SEMI')
   "return {'tag': 'IMPORT', 'pos': b:pos, 'qualid': pid, 'staticImport': importStatic}
   return fqn
@@ -2934,12 +2934,13 @@ fu! s:classOrInterfaceOrEnumDeclaration(mods, dc)
     "endif
     return s:enumDeclaration(a:mods, a:dc)
   else
+    let pos = b:pos
     let errs = []
     if b:token == 'IDENTIFIER'
       call add(errs, s:ident())
       call s:setErrorEndPos(b:bp)
     endif
-    call s:SyntaxError("class.or.intf.or.enum.expected")
+    return s:SyntaxError("class.or.intf.or.enum.expected", pos, errs)
   endif
 endfu
 

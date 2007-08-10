@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 8
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 10
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -39,7 +39,7 @@ Filetype detection will set the omnifunction appropriately.
 
 1.1 Features					*javacomplete-features*
 
-- List members of a class, such as (static) fields, (static) methods.
+- List members of a class, including (static) fields, (static) methods and ctors.
 - List classes or subpackages of a package.
 - Provide parameters information of a method, list all overload methods.
 - Complete an incomplete field or method name.
@@ -167,9 +167,14 @@ Note that '|' indicates cursor position
 	javacomplete#DelSourcePath('sources_file_path')
 	javacomplete#SetSourcePath('sources_file_path')
 
-5. Set using JDK1.1 option if you meet the problem described in FAQ 3: >
+5. Set option for using JDK1.1 if you meet the problem described in FAQ 3: >
 	javacomplete#UseJDK11()
 
+6. Set methods to search declaration: >
+	" 1 - by builtin searchdecl(), quickest but inaccurate in many cases.
+	" 2 - by special Searchdecl(), work NOT WELL YET.
+	" 4 - by java_parser, slowest but accurate in most cases. Not for JSP.
+	javacomplete#SetSearchdeclMethod()
 
 2.3 Commands					*javacomplete-commands*
 
@@ -244,10 +249,12 @@ file in $HOME.
 
 (3). A error for using JDK1.1:
     Unable to initialize threads: cannot find class java/lang/Thread
-When I tested JDK1.1.8 on my Windows XP, I met it. And I found it is
--classpath that cause it. So, a way to avoid it is:
+When I tested JDK1.1.8 on my Windows XP, I found -classpath options cause it.
+There are two way to avoid it is:
+    o	Add the runtime classes to classpath, like
+	"${JDK118}\classes;${JDK118}\lib\classes.zip;${JDK118}\lib\classes.jar;"
     o	Add Reflection.class and others to the CLASSPATH enviroment variable.
-    o	And call javacomplete#UseJDK11() to set option.
+	And call javacomplete#UseJDK11() to set option.
 
 ==============================================================================
 5. Limitations					*javacomplete-limitations*
@@ -258,6 +265,15 @@ The embedded parser works a bit slower than expected.
 6. History					*javacomplete-history*
 
 6.1 javacomplete				*javacomplete-history*
+
+v0.76.3
+    2007-08-10
+    -	Add an option 'searchdecl' set by javacomplete#SetSearchdeclMethod().
+    -	Make an improvement for jsp file.
+    -	Clear cache when set options affecting classpath.
+    -	Improved DoGetPackageList() and s:GenerateImports().
+    -	Replace codes searching list of string with index().
+
 v0.76.2
     2007-08-08
     -	Fix failing to list members of nested class.
@@ -314,6 +330,12 @@ v0.50 2007-01-21	Use java and Reflection.class directly.
 
 6.2 Parser					*java-parser-history*
 
+v0.63
+    2007-08-10	
+    -	Removed the unclear s:tokens and s:modifier_keywords.
+    -	Add java_parser#GetSnapshot() and java_parser#Restore().
+    2007-08-09	Fixed a bug when no top level class defined
+
 v0.62 2007-08-08
     2007-08-08	Fix values in s:Flags and s:modifiersOpt() and the related.
     2007-08-07	Optimize code of scanDoubleQuote() and importDeclaration().
@@ -339,6 +361,9 @@ v0.50 2007-02-10	Complete the skeleton.
 
 
 6.3 Reflection.java			*javacomplete-reflection*
+
+v0.76.3
+    2007-08-09	Redefined '-P' option for returning all packages and subpackages info in one time.
 
 v0.76.2
     2007-08-06	Return a modifier value as a string because it more than 32bit.

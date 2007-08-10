@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76.2
+" Version:	0.76.3
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-08
+" Last Change:	2007-08-10
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -512,6 +512,10 @@ function! s:GenerateImports()
   let b:packages = ['java.lang.']
   let b:fqns = []
 
+  if &ft == 'jsp'
+    return s:GenerateImportsInJSP()
+  endif
+
   while 1
     let lnum = search('\<import\>', 'Wb')
     if (lnum == 0)
@@ -522,14 +526,41 @@ function! s:GenerateImports()
       continue
     end
 
-    let item = substitute(strpart(getline(lnum), col('.')-1), 'import\s\+\(static\s\+\)\?\([a-zA-Z0-9_.*]\+\).*', '\2', '')
-    if item =~ '\*$'
-      call add(b:packages, strpart(item, 0, strlen(item)-1))
-    elseif item =~ '[A-Za-z0-9_]$'
-      call add(b:fqns, item)
+    let stat = strpart(getline(lnum), col('.')-1)	" TODO: search semicolon or import keyword, excluding comment
+    let RE_IMPORT_DECL = '\<import\>\(\s\+static\>\)\?\s\+\(\(\([a-zA-Z_$][a-zA-Z0-9_$]*\)\(\s*\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\)*\)\(\s*\.\s*\*\)\?\);'
+    if stat =~ RE_IMPORT_DECL
+      let item = substitute(stat, RE_IMPORT_DECL . '.*$', '\2', '')
+      let item = substitute(item , '\s*\.\s*', '.', 'g')
+      if item =~ '\*$'
+	call add(b:packages, strpart(item, 0, strlen(item)-1))
+      elseif item =~ '[A-Za-z0-9_]$'
+	call add(b:fqns, item)
+      endif
     endif
   endwhile
 endfunction
+
+fu! s:GenerateImportsInJSP()
+  while 1
+    let lnum = search('\<import\s*=[''"]', 'Wb')
+    if (lnum == 0)
+      break
+    endif
+
+    let str = getline(lnum)
+    if str =~ '<%\s*@\s*page\>' || str =~ '<jsp:\s*directive.page\>'
+      let str = substitute(str, '.*import=[''"]\([a-zA-Z0-9_$.*, \t]\+\)[''"].*', '\1', '')
+      for item in split(str, ',')
+	let item = substitute(item, '\s', '', 'g')
+	if item =~ '\*$'
+	  call add(b:packages, strpart(item, 0, strlen(item)-1))
+	elseif item =~ '[A-Za-z0-9_]$'
+	  call add(b:fqns, item)
+	endif
+      endfor
+    endif
+  endwhile
+endfu
 
 " Return: The declaration of identifier under the cursor
 " Note: The type of a variable must be imported or a fqn.
@@ -662,7 +693,7 @@ function! s:GetDeclaredClassName(var)
 
   " Special handling for builtin objects in JSP
   if &ft == 'jsp'
-    if len(s:JSP_BUILTIN_OBJECTS[a:var]) > 0
+    if get(s:JSP_BUILTIN_OBJECTS, a:var, '') != ''
       return s:JSP_BUILTIN_OBJECTS[a:var]
     endif
   endif
@@ -678,6 +709,7 @@ function! s:GetDeclaredClassName(var)
 
   " TODO:
   " use java_parser.vim
+  if javacomplete#GetSearchdeclMethod() == 4
   if empty(b:ast)
     call java_parser#InitParser(getline('^', '$'))
     call java_parser#SetLogLevel(5)
@@ -698,13 +730,14 @@ function! s:GetDeclaredClassName(var)
       return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype) : ''
     endif
   endif
+  endif
 
 
   let ic = &ignorecase
   setlocal noignorecase
 
-  " TODO: firstly, use my version of Searchdecl()
-  if (searchdecl(var, 1, 0) == 0)
+  let searched = javacomplete#GetSearchdeclMethod() == 2 ? s:Searchdecl(var, 1, 0) : searchdecl(var, 1, 0)
+  if (searched == 0)
     " code sample:
     " String tmp; java.
     " 	lang.  String str, value;
@@ -974,7 +1007,12 @@ fu! s:SearchNameInAST(tree, name, targetPos)
     endif
 
   elseif a:tree.tag == 'BLOCK'
-    for stat in a:tree.stats
+    let stats = a:tree.stats
+    if stats == []
+      call java_parser#GotoPosition(a:tree.pos)
+      let stats = java_parser#block().stats
+    endif
+    for stat in stats
       if stat.tag == 'VARDEF'
 	let matchs += s:SearchNameInAST(stat, a:name, a:targetPos)
 
@@ -1051,20 +1089,25 @@ function! s:GetFQN(name)
   endif
 
   " quick check
-  for invalid in s:INVALID_FQNS
-    if a:name == invalid
-      return ''
-    endif
-  endfor
+  if index(s:INVALID_FQNS, a:name) != -1
+    return ''
+  endif
 
   call s:Debug('GetFQN: to check case 2: is one of b:fqns?')
-  " Search for a:name in b:fqns
-  " TODO: solve name conflict
+  let matches = []
   for fqn in b:fqns
-    if (a:name == strpart(fqn, strridx(fqn, '.')+1))
-      return fqn
+    if fqn =~ '\<' . a:name . '$'
+      call add(matches, fqn)
     endif
   endfor
+  if !empty(matches)
+    if len(matches) > 1
+      echoerr 'Name "' . a:name . '" conflicts between ' . join(matches, ' and ')
+      return ''
+    else
+      return matches[0]
+    endif
+  endif
 
   call s:Debug('GetFQN: to check case 3: a class in this buffer, or same package, or sourcepath?')
   call javacomplete#parse()
@@ -1121,22 +1164,18 @@ function! s:IsFQN(name)
   endif
 
   " quick check
-  for invalid in s:INVALID_FQNS
-    if a:name == invalid
-      return 0
-    endif
-  endfor
+  if index(s:INVALID_FQNS, a:name) != -1
+    return 0
+  endif
 
   " already stored in cache
   if has_key(s:cache, a:name)
     return 1
   endif
 
-  for a in values(s:CLASS_ABBRS)
-    if a == a:name
-      return 1
-    endif
-  endfor
+  if index(values(s:CLASS_ABBRS), a:name) != -1
+    return 1
+  endif
 
   " class defined in current source path
   " TODO:
@@ -1169,6 +1208,21 @@ fu! s:IsBuiltinType(name)
 endfu
 
 " options								{{{1
+" Methods to search declaration						{{{2
+"	1 - by builtin searchdecl()
+"	2 - by special Searchdecl()
+"	4 - by java_parser
+fu! javacomplete#GetSearchdeclMethod()
+  if &ft == 'jsp'
+    return 1
+  endif
+  return exists('s:searchdecl') ? s:searchdecl : 4
+endfu
+
+fu! javacomplete#SetSearchdeclMethod(method)
+  let s:searchdecl = a:method
+endfu
+
 " JDK1.1								{{{2
 fu! javacomplete#UseJDK11()
   let s:isjdk11 = 1
@@ -1189,6 +1243,9 @@ fu! javacomplete#GetJVMLauncher()
 endfu
 
 fu! javacomplete#SetJVMLauncher(interpreter)
+  if javacomplete#GetJVMLauncher() != a:interpreter
+    let s:cache = {}
+  endif
   let s:interpreter = a:interpreter
 endfu
 
@@ -1196,31 +1253,17 @@ endfu
 fu! javacomplete#AddSourcePath(s)
   if !exists('s:sourcepath')
     let s:sourcepath = [a:s]
-    return
-  endif
-
-  let found = 0
-  for i in s:sourcepath
-    if i == a:s
-      let found = 1
-      break
-    endif
-  endif
-  if !found
+  elseif index(s:sourcepath, a:s) == -1
     call add(s:sourcepath, a:s)
   endif
 endfu
 
 fu! javacomplete#DelSourcePath(s)
   if !exists('s:sourcepath') | return   | endif
-  let i = 0
-  while i < len(s:sourcepath)
-    if s:sourcepath[i] == a:s
-      call remove(s:sourcepath, i)
-      return
-    endif
-    let i += 1
-  endwhile
+  let idx = index(s:sourcepath, a:s)
+  if idx != -1
+    call remove(s:sourcepath, idx)
+  endif
 endfu
 
 fu! javacomplete#SetSourcePath(s)
@@ -1270,30 +1313,18 @@ endfu
 fu! javacomplete#AddClassPath(s)
   if !exists('s:classpath')
     let s:classpath = [a:s]
-    return
-  endif
-
-  let found = 0
-  for i in s:classpath
-    if i == a:s
-      let found = 1
-    endif
-  endif
-  if !found
+  elseif index(s:classpath, a:s) == -1
     call add(s:classpath, a:s)
   endif
+  let s:cache = {}
 endfu
 
 fu! javacomplete#DelClassPath(s)
   if !exists('s:classpath') | return   | endif
-  let i = 0
-  while i < len(s:classpath)
-    if s:classpath[i] == a:s
-      call remove(s:classpath, i)
-      return
-    endif
-    let i += 1
-  endwhile
+  let idx = index(s:classpath, a:s)
+  if idx != -1
+    call remove(s:classpath, idx)
+  endif
 endfu
 
 fu! javacomplete#SetClassPath(s)
@@ -1302,6 +1333,7 @@ fu! javacomplete#SetClassPath(s)
   elseif type(a:s) == type([])
     let s:classpath = a:s
   endif
+  let s:cache = {}
 endfu
 
 fu! javacomplete#GetClassPathSep()
@@ -1457,7 +1489,8 @@ fu! s:GotoUpperBracket()
   endwhile
 endfu
 
-" 	Improve recognition of variable declaration using my version of searchdecl() for accuracy reason.
+" Improve recognition of variable declaration using my version of searchdecl() for accuracy reason.
+" TODO:
 fu! s:Searchdecl(name, ...)
   let global = a:0 > 0 ? a:1 : 0
   let thisblock = a:0 > 1 ? a:2 : 1
@@ -1713,6 +1746,7 @@ fu! s:MergeClassInfo(ci, another)
     for i in a:ci.fields
       if f.n == i.n
 	let found = 1
+	break
       endif
     endfor
     if !found
@@ -1725,6 +1759,7 @@ fu! s:MergeClassInfo(ci, another)
     for i in a:ci.methods
       if m.n == i.n
 	let found = 1
+	break
       endif
     endfor
     if !found
@@ -1979,19 +2014,22 @@ function! s:DoGetPackageList(class, option)
   endif
 
   let res = s:RunReflection(a:option, a:class, 's:DoGetPackageList')
-  if len(res) == 0
-    return ''
-  endif
-  if res !~ "^["
-    let b:errormsg = res
-    return ''
+  if res =~ '^[{\[]'
+    exe 'let v = ' . res
+    if type(v) == type([])
+      let s:cache[a:class] = sort(v)
+      return s:cache[a:class]
+    elseif type(v) == type({})
+      for key in keys(v)
+	let s:cache[key] = sort(get(s:cache, key, []) + split(v[key], ','))
+      endfor
+      return get(s:cache, a:class, [])
+    endif
+    unlet v
   endif
 
-  exe 'let list = ' . res
-  if type(list) == type([])
-    let s:cache[a:class] = sort(list)
-  endif
-  return list
+  let b:errormsg = res
+  return []
 endfunction
 
 " generate member list							{{{2
