@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-10
-" Version:	0.63
+" Last Changed: 2007-08-17
+" Version:	0.63.1
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.63'
+let g:loaded_javaparser = 'v0.63.1'
 
 
 " Constants used by scanner and parser					{{{1
@@ -1937,7 +1937,7 @@ fu! s:term3()
     if typeArgs == [] && s:modeAndEXPR()
       call s:nextToken()
       if b:token == 'DOT'
-	let ti = {'tag': 'TYPEIDENT', 'pos': pos, 'typetag': 'VOID'}	" FIXME
+	let ti = {'tag': 'TYPEIDENT', 'pos': pos, 'typetag': 'void'}	" FIXME
 	let t = s:bracketsSuffix(ti)
       else
 	return s:illegal()
@@ -2164,20 +2164,15 @@ endfu
 fu! s:bracketsOpt(t)
   let t = a:t
   while b:token == 'LBRACKET'
-    "let t.value .= '['
     let pos = b:pos
     call s:nextToken()
-    call s:bracketsOptCont(t, pos)
-    return t
+    let t = s:bracketsOptCont(t, pos)
   endwhile
   return t
 endfu
 
 fu! s:bracketsOptCont(t, pos)
   let t = a:t
-  "if b:token == 'RBRACKET'
-  "  let t.value .= ']'
-  "endif
   call s:accept('RBRACKET')
   let t = s:bracketsOpt(t)
   return s:TypeArray(a:pos, t)
@@ -3156,7 +3151,7 @@ fu! s:classOrInterfaceBodyDeclaration(classname, isInterface)
       let type = copy(s:TTree)
       let isVoid = b:token == 'VOID'
       if isVoid
-	let type = {'tag': 'TYPEIDENT', 'pos': pos, 'typetag': 'VOID'}	" FIXME
+	let type = {'tag': 'TYPEIDENT', 'pos': pos, 'typetag': 'void'}	" FIXME
 	let type.value = ''
 	call s:nextToken()
       else

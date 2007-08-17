@@ -2,9 +2,9 @@
  * Reflection.java
  *
  * A utility class for javacomplete mainly for reading class or package information.
- * Version:	0.76.3
+ * Version:	0.76.4.1
  * Maintainer:	cheng fang <fangread@yahoo.com.cn>
- * Last Change:	2007-08-10
+ * Last Change:	2007-08-16
  * Copyright:	Copyright (C) 2007 cheng fang. All rights reserved.
  * License:	Vim License	(see vim's :help license)
  * 
@@ -16,7 +16,7 @@ import java.util.*;
 import java.util.zip.*;
 
 class Reflection {
-    static final String VERSION	= "0.76.3";
+    static final String VERSION	= "0.76.4.1";
 
     static final int OPTION_FIELD		=  1;
     static final int OPTION_METHOD		=  2;
@@ -46,6 +46,8 @@ class Reflection {
 
     static boolean debug_mode = false;
 
+    static Hashtable htClasspath = new Hashtable();
+
     public static boolean existed(String fqn) {
 	boolean result = false;
 	try {
@@ -57,52 +59,65 @@ class Reflection {
 	return result;
     }
 
-    public static String existedAndRead(String str) {
-	StringBuffer sb = new StringBuffer(1024);
-	sb.append("{");
+    public static String existedAndRead(String fqns) {
+	Hashtable mapPackages = new Hashtable();	// qualified name --> StringBuffer
+	Hashtable mapClasses = new Hashtable();		// qualified name --> StringBuffer
 
-	int prev = 0;
-	int idx = -1;
-	while ( (idx = str.indexOf(',', idx+1)) != -1 ) {
-	    String fqn = str.substring(prev, idx);
-	    prev = idx+1;
-
+	for (StringTokenizer st = new StringTokenizer(fqns, ","); st.hasMoreTokens(); ) {
+	    String fqn = st.nextToken();
 	    try {
-		Class.forName(fqn);
-		sb.append("'" + fqn +"': ").append(getClassInfo(fqn)).append(",");
+		Class clazz = Class.forName(fqn);
+		putClassInfo(mapClasses, clazz);
 	    }
 	    catch (Exception ex) {
+		String binaryName = fqn;
+		boolean found = false;
+		while (true) {
+		    try {
+			int lastDotPos = binaryName.lastIndexOf('.');
+			if (lastDotPos == -1)
+			    break;
+			binaryName = binaryName.substring(0, lastDotPos) + '$' + binaryName.substring(lastDotPos+1, binaryName.length());
+			Class clazz = Class.forName(binaryName);
+			putClassInfo(mapClasses, clazz);
+			found = true;
+			break;
+		    }
+		    catch (Exception e) {
+		    }
+		}
+		if (!found)
+		    putPackageInfo(mapPackages, fqn);
 	    }
-	    finally {
-		// it is a package?
-		String s = getPackageList(fqn);
-		if (!s.equals("[]"))
-		    sb.append("'" + fqn +"': ").append(s).append(",");
-	    }
-	}
-	String fqn = str.substring(prev);
-	try {
-	    Class.forName(fqn);
-	    sb.append("'" + fqn +"': ").append(getClassInfo(fqn)).append(",");
-	}
-	catch (Exception ex) {
-	}
-	finally {
-	    // it is a package?
-	    String s = getPackageList(fqn);
-	    if (!s.equals("[]"))
-		sb.append("'" + fqn +"': ").append(s).append(",");
 	}
 
-
-	sb.append("}");
-	return sb.toString();
+	if (mapPackages.size() > 0 || mapClasses.size() > 0) {
+	    StringBuffer sb = new StringBuffer(4096);
+	    sb.append("{");
+	    for (Enumeration e = mapPackages.keys(); e.hasMoreElements(); ) {
+		String s = (String)e.nextElement();
+		sb.append("'").append( s.replace('$', '.') ).append("':").append(mapPackages.get(s)).append(",");
+	    }
+	    for (Enumeration e = mapClasses.keys(); e.hasMoreElements(); ) {
+		String s = (String)e.nextElement();
+		sb.append("'").append( s.replace('$', '.') ).append("':").append(mapClasses.get(s)).append(",");
+	    }
+	    sb.append("}");
+	    return sb.toString();
+	}
+	else
+	    return "";
     }
 
-    public static String getPackageList(String fqn) {
-	fqn = fqn.replace('.', '/') + "/";
-	StringBuffer sb = new StringBuffer(1024);
-	sb.append("[");
+    private static String getPackageList(String fqn) {
+	Hashtable mapPackages = new Hashtable();
+	putPackageInfo(mapPackages, fqn);
+	return mapPackages.size() > 0 ? mapPackages.get(fqn).toString() : "";
+    }
+
+    private static Hashtable collectClassPath() {
+	if (!htClasspath.isEmpty())
+	    return htClasspath;
 
 	// system classpath
 	String java_home_path = System.getProperty("java.home") + "/lib/";
@@ -111,7 +126,7 @@ class Reflection {
 	for (int i = 0; i < items.length; i++) {
 	    String path = items[i];
 	    if (path.endsWith(".jar") || path.endsWith(".zip")) {
-		appendListFromJar(sb, fqn, java_home_path + path);
+		htClasspath.put(new File(java_home_path + path).toString(), "");
 	    }
 	}
 
@@ -120,14 +135,98 @@ class Reflection {
 	StringTokenizer st = new StringTokenizer(classPath, ";");
 	while (st.hasMoreTokens()) {
 	    String path = st.nextToken();
+	    File f = new File(path);
+	    if (!f.isDirectory())
+		continue;
+
 	    if (path.endsWith(".jar") || path.endsWith(".zip"))
-		appendListFromJar(sb, fqn, path);
+		htClasspath.put(f.toString(), "");
+	    else {
+		if (f.isDirectory())
+		    htClasspath.put(f.toString(), "");
+	    }
+	}
+	return htClasspath;
+    }
+
+    /**
+     * If name is empty, put all loadable package info into map once.
+     */
+    private static void putPackageInfo(Hashtable map, String name) {
+	String prefix = name.replace('.', '/') + "/";
+	Hashtable subpackages = new Hashtable();
+	Hashtable classes = new Hashtable();
+	for (Enumeration e = collectClassPath().keys(); e.hasMoreElements(); ) {
+	    String path = (String)e.nextElement();
+	    if (path.endsWith(".jar") || path.endsWith(".zip"))
+		appendListFromJar(subpackages, classes, path, prefix);
 	    else
-		appendListFromFolder(sb, fqn, path);
+		appendListFromFolder(subpackages, classes, path, prefix);
 	}
 
-	sb.append("]");
-	return sb.toString();
+	if (subpackages.size() > 0 || classes.size() > 0) {
+	    StringBuffer sb = new StringBuffer(1024);
+	    sb.append("{'tag':'PACKAGE','subpackages':[");
+	    for (Enumeration e = subpackages.keys(); e.hasMoreElements(); ) {
+		sb.append("'").append(e.nextElement()).append("',");
+	    }
+	    sb.append("],'classes':[");
+	    for (Enumeration e = classes.keys(); e.hasMoreElements(); ) {
+		sb.append("'").append(e.nextElement()).append("',");
+	    }
+	    sb.append("]}");
+	    map.put(name, sb.toString());
+	}
+    }
+
+    public static void appendListFromJar(Hashtable subpackages, Hashtable classes, String path, String prefix) {
+	try {
+	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
+		String entry = entries.nextElement().toString();
+		int len = entry.length();
+		if (entry.endsWith(".class") && entry.indexOf('$') == -1
+			&& entry.startsWith(prefix)) {
+		    int splitPos = entry.indexOf('/', prefix.length());
+		    String shortname = entry.substring(prefix.length(), splitPos == -1 ? entry.length()-6 : splitPos);
+		    if (splitPos == -1) {
+			if (!classes.containsKey(shortname))
+			    classes.put(shortname, ""); //classes.put(shortname, "{'tag':'CLASSDEF','name':'"+shortname+"'}");
+		    }
+		    else {
+			if (!subpackages.containsKey(shortname))
+			    subpackages.put(shortname, ""); //subpackages.put(shortname, "{'tag':'PACKAGE','name':'" +shortname+"'}");
+		    }
+		}
+	    }
+	}
+	catch (Throwable e) {
+	    //e.printStackTrace();
+	}
+    }
+
+    public static void appendListFromFolder(Hashtable subpackages, Hashtable classes, String path, String prefix) {
+	try {
+	    String fullPath = path + "/" + prefix;
+	    File file = new File(fullPath);
+	    if (file.isDirectory()) {
+		String[] descents = file.list();
+		for (int i = 0; i < descents.length; i++) {
+		    if (descents[i].indexOf('$') == -1) {
+			if (descents[i].endsWith(".class")) {
+			    String shortname = descents[i].substring(0, descents[i].length()-6);
+			    if (!classes.containsKey(shortname))
+				classes.put(shortname, "");
+			}
+			else if ((new File(fullPath + "/" + descents[i])).isDirectory()) {
+			    if (!subpackages.containsKey(descents[i]))
+				subpackages.put(descents[i], "");
+			}
+		    }
+		}
+	    }						
+	}
+	catch (Throwable e) {
+	}
     }
 
     public static String getPackageList() {
@@ -167,26 +266,6 @@ class Reflection {
 
     }
 
-    public static void appendListFromJar(StringBuffer sb, String fqn, String path) {
-	try {
-	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
-		String entry = entries.nextElement().toString();
-		if (entry.indexOf('$') == -1 && entry.endsWith(".class")
-			&& entry.startsWith(fqn)) {
-		    int splitPos = entry.indexOf('/', fqn.length());
-		    if (splitPos == -1)
-			splitPos = entry.indexOf(".class",fqn.length());
-		    String descent = entry.substring(fqn.length(),splitPos);
-		    if (sb.toString().indexOf("'" + descent + "',") == -1)
-			sb.append("'").append(descent).append("',");
-		    debug(descent);
-		}
-	    }
-	}
-	catch (Throwable e) {
-	}
-    }
-
     public static void appendListFromJar(String path, Hashtable map) {
 	try {
 	    for (Enumeration entries = new ZipFile(path).entries(); entries.hasMoreElements(); ) {
@@ -218,35 +297,6 @@ class Reflection {
 	}
     }
 
-    public static void appendListFromFolder(StringBuffer sb, String fqn, String path) {
-	try {
-	    String fullPath = path + "/" + fqn;
-	    File file = new File(fullPath);
-	    if (file.exists()) {
-		String[] descents = file.list();
-		for (int i = 0; i < descents.length; i++) {
-		    if (descents[i].indexOf('$') == -1) {
-			String className = null;
-			String descent = null;
-			if (descents[i].endsWith(".class")) {
-			    descent = descents[i].substring(0,descents[i].indexOf(".class"));
-			    sb.append("'").append(descent).append("',");
-			    debug(descent);
-			    className = (fqn + descent).replace('/','.');									
-			}
-			else if ((new File(fullPath + "/" + descents[i])).isDirectory()) {
-			    descent = descents[i];
-			    sb.append("'").append(descent).append("',");
-			    debug(descent);
-			}
-		    }
-		}
-	    }						
-	}
-	catch (Throwable e) {
-	}
-    }
-
     public static void appendListFromFolder(String path, Hashtable map, String fqn) {
 	try {
 	    File file = new File(path);
@@ -274,11 +324,23 @@ class Reflection {
     }
 
     public static String getClassInfo(String className) {
-	StringBuffer sb = new StringBuffer(1024);
-	sb.append("{");
-
+	Hashtable mapClasses = new Hashtable();
 	try {
 	    Class clazz = Class.forName(className);
+	    putClassInfo(mapClasses, clazz);
+	}
+	catch (Exception ex) {
+	}
+	return mapClasses.size() > 0 ? mapClasses.get(className).toString() : "";
+    }
+
+    private static void putClassInfo(Hashtable map, Class clazz) {
+	try {
+	    StringBuffer sb = new StringBuffer(1024);
+	    sb.append("{")
+	      .append("'tag':'CLASSDEF',")
+	      .append("'flags':'").append(Integer.toString(clazz.getModifiers(), 2)).append("',")
+	      .append("'name':'").append(clazz.getName().replace('$', '.')).append("',");
 
 	    Constructor[] ctors = clazz.getConstructors();
 	    sb.append("'ctors':[");
@@ -321,13 +383,22 @@ class Reflection {
 		sb.append("},").append(NEWLINE);
 	    }
 	    sb.append("], ").append(NEWLINE);
+
+	    Class[] classes = clazz.getDeclaredClasses();
+	    sb.append("'classes': [");
+	    for (int i = 0, n = classes.length; i < n; i++) {
+		Class c = classes[i];
+		sb.append("'").append(c.getName().replace('$', '.')).append("',");
+		putClassInfo(map, c);			// !!
+	    }
+	    sb.append("], ").append(NEWLINE);
+
+	    sb.append("}");
+	    map.put(clazz.getName(), sb);
 	}
 	catch (Exception ex) {
 	    //ex.printStackTrace();
 	}
-	//return "[\"-- String --\", \"abd\", {\"word\" : \"method\", \"abbr\" : \"m\", \"menu\" : \"miii\", \"info\" : \"method information \", \"kind\" : \"f\"}]";
-	sb.append("}");
-	return sb.toString();
     }
 
     private static void appendModifier(StringBuffer sb, int modifier) {
@@ -360,13 +431,13 @@ class Reflection {
     }
     static void output(String s) {
 	if (!debug_mode)
-	    System.out.println(s);
+	    System.out.print(s);
     }
 
 
     private static void usage() {
 	System.out.println("Reflection for javacomplete (" + VERSION + ")");
-	System.out.println("  java [-classpath] Reflection [-c] [-d] [-e] [-h] [-v] [-p] [-s] classname");
+	System.out.println("  java [-classpath] Reflection [-c] [-d] [-e] [-h] [-v] [-p] [-s] name[,comma_separated_name_list]");
 	System.out.println("Options:");
 	System.out.println("  -a	list all members in alphabetic order");
 	System.out.println("  -c	list constructors");

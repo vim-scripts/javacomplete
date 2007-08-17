@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 10
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 17
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -11,8 +11,9 @@
    1.4 Install					|javacomplete-install|
 2. Usage    					|javacomplete-usage|
    2.1 Input contexts				|javacomplete-contexts|
-   2.2 Options					|javacomplete-options|
-   2.3 Commands					|javacomplete-commands|
+   2.2 Kind letter				|javacomplete-kindletter|
+   2.3 Options					|javacomplete-options|
+   2.4 Commands					|javacomplete-commands|
 3. Java parser in Vim    			|javacomplete-parser|
    3.1 Abstract Syntax Tree			|javacomplete-ast|
    3.2 Global Constants				|javacomplete-constants|
@@ -64,9 +65,9 @@ You can download the lastest version from this url:
 1. Unzip javacomplete.zip to an autoload directory, e.g. $VIM/vimfiles/autoload
    Move javacomplete.txt to help directory, e.g. $VIM/vimfiles/doc.
 
-2. Set 'omnifunc' option. e.g.
+2. Set 'omnifunc' option. e.g. >
 	set omnifunc=javacomplete#Complete
-   You can add this command in a ftplugin script like ftplugin/java_xxx.vim.
+<  You can add this command in a ftplugin script like ftplugin/java_xxx.vim.
    Or, use autocmd: >
 	" Only do this part when compiled with support for autocommands.
 	if has("autocmd")
@@ -108,9 +109,11 @@ Note that '|' indicates cursor position
 
    (2). after '(', or between '(' and ')', to get the list of methods matched with parameter information. It's better to provide javadoc.
 	- method(|) 	methods matched
+	- var.method(|) methods matched
 	- new Class(|) 	constructors matched
+	- this(|) 	constructors of current class matched
 
-   (3). after an incomplette word, to provide a candidates matched for selection.
+   (3). after an incomplete word, to provide a list of matches for selection.
 	- var.ab| 	subset of members of var begining with 'ab'
 	- ab		list of all maybes
 
@@ -118,11 +121,14 @@ Note that '|' indicates cursor position
 	- " import 	java.util.|"
 	- " import 	java.ut|"
 	- " import 	ja|"
-	- " import 	java.lang.ThreadLocal.|"
-	Many products do not implements case 4, including eclipse, jcreator.
+	- " import 	java.lang.Character.|"	e.g. "Subset"
+	- " import static java.lang.Math.|"	e.g. "PI, abs"
+
+   (4). package declaration
+	- " package 	com.|"
 
    The above are in simple expression.
-   (5). after compound expression:
+   (6). after compound expression:
 	- boolean.class.|
 	- compound_expr.var.|
 	- compound_expr.method().|
@@ -131,6 +137,8 @@ Note that '|' indicates cursor position
 	e.g.
 	- "java.lang	. System.in .|"
 	- "java.lang.System.getenv().|"
+	- "int.class.toString().|"
+	- "list.toArray().|"
 
    (6). Nested expression:
 	- "System.out.println( str.| )"
@@ -139,7 +147,19 @@ Note that '|' indicates cursor position
 	- "for ( Object o : a.getCollect| )"
 
 
-2.2 Options					*javacomplete-options*
+2.2 Kind letter					*javacomplete-kindletter*
+
+A single letter indicates the type of compeltion item. These types are:
+	+	ctor
+	C	class type
+	f	nonstatic field
+	F	static field
+	I	interface type
+	m	nonstatic method
+	M	static method
+	P	package
+
+2.3 Options					*javacomplete-options*
 
 1. Set java compiler (default 'javac') using the following function:
 	javacomplete#SetCompiler('javac')	*javacomplete-compiler*
@@ -176,7 +196,7 @@ Note that '|' indicates cursor position
 	" 4 - by java_parser, slowest but accurate in most cases. Not for JSP.
 	javacomplete#SetSearchdeclMethod()
 
-2.3 Commands					*javacomplete-commands*
+2.4 Commands					*javacomplete-commands*
 
 ==============================================================================
 3. Java parser in Vim    			*javacomplete-parser*
@@ -262,9 +282,22 @@ There are two way to avoid it is:
 The embedded parser works a bit slower than expected.
 
 ==============================================================================
-6. History					*javacomplete-history*
+6. History					
 
 6.1 javacomplete				*javacomplete-history*
+
+v0.76.4
+    2007-08-17
+    -	Improved input contexts: "int.class.toString().|", "list.toArray().|".
+    -	Fixed recognition of "this(|)", "method1(|)"
+    -	Added the 'kind' letter to distinguish between classes and packages.
+    2007-08-14
+    -	Support accessible nested classes.
+    -	Support import static members and import accessible nested classes.
+    2007-08-11
+    -	Fixed a bug when Reflection.java is in the path which contains space.
+    -	Improved process of this and super in JSP.
+    -	Fixed an severe bug parsing current jsp file.
 
 v0.76.3
     2007-08-10
@@ -362,6 +395,8 @@ v0.50 2007-02-10	Complete the skeleton.
 
 6.3 Reflection.java			*javacomplete-reflection*
 
+    2007-08-14	Major improvement. Support nontoplevel classes.
+
 v0.76.3
     2007-08-09	Redefined '-P' option for returning all packages and subpackages info in one time.
 
@@ -385,7 +420,7 @@ v0.7  2007-02-17
 -  Give a hint for class name conflict in different packages.
 -  Add quick information using balloonexpr, ballooneval, balloondelay.
 -  Improve performance of the embedded parser.
--  Support fields in base class(es).
+-  Support fields in super class(es).
 
 ==============================================================================
 8. Thanks					*javacomplete-thanks*
@@ -395,6 +430,10 @@ v0.7  2007-02-17
         * All of you for using this script :)
 
         * For help, documentation, bug report :
+	 	Martin Stubenschrott	author of IComplete
+		Vissale NEANG		author of OmniCppComplete
+		David Fishburn		author of SQLComplete and others
+		Zhixing Yu
 
 FeedBack:
 Any problem, bug or suggest are welcome to send to fangread@yahoo.com.cn
