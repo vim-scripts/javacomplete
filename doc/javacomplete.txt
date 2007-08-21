@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 17
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 21
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -112,6 +112,7 @@ Note that '|' indicates cursor position
 	- var.method(|) methods matched
 	- new Class(|) 	constructors matched
 	- this(|) 	constructors of current class matched
+	- super(|) 	constructors of super class matched
 
    (3). after an incomplete word, to provide a list of matches for selection.
 	- var.ab| 	subset of members of var begining with 'ab'
@@ -124,7 +125,7 @@ Note that '|' indicates cursor position
 	- " import 	java.lang.Character.|"	e.g. "Subset"
 	- " import static java.lang.Math.|"	e.g. "PI, abs"
 
-   (4). package declaration
+   (5). package declaration
 	- " package 	com.|"
 
    The above are in simple expression.
@@ -139,8 +140,10 @@ Note that '|' indicates cursor position
 	- "java.lang.System.getenv().|"
 	- "int.class.toString().|"
 	- "list.toArray().|"
+	- "new ZipFile(path).|"
+	- "new ZipFile(path).entries().|"
 
-   (6). Nested expression:
+   (7). Nested expression:
 	- "System.out.println( str.| )"
 	- "System.out.println(str.charAt(| )"
 	- "for (int i = 0; i < str.|; i++)"
@@ -286,10 +289,17 @@ The embedded parser works a bit slower than expected.
 
 6.1 javacomplete				*javacomplete-history*
 
+v0.76.5
+    2007-08-21
+    -	Fixed bug: "foo().|", "getFoo().foo().|", 
+	"for (Enumeration entries = ; entries.|; )".
+    -	Supported input contexts: "((Object)o).|", "((Object)o).getClass().|",
+	"new ZipFile(path).|", "(new String().)|".
+
 v0.76.4
     2007-08-17
     -	Improved input contexts: "int.class.toString().|", "list.toArray().|".
-    -	Fixed recognition of "this(|)", "method1(|)"
+    -	Fixed recognizing "this(|)", "method1(|)"
     -	Added the 'kind' letter to distinguish between classes and packages.
     2007-08-14
     -	Support accessible nested classes.
@@ -362,6 +372,11 @@ v0.50 2007-01-21	Use java and Reflection.class directly.
 
 
 6.2 Parser					*java-parser-history*
+
+v0.64
+    2007-08-21
+    -	Added quick recognizing fields or methods declared in most common form.
+    -	Optimized code: s:modeAndEXPR(), formalParameter(), and others.
 
 v0.63
     2007-08-10	

@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76.4
+" Version:	0.76.5
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-17
+" Last Change:	2007-08-21
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -278,14 +278,61 @@ function! s:CompleteAfterDot()
     return s:GetMemberList("java.lang.String")
   endif
 
+  let typename = ''
+  if expr =~ '^('
+    let idx = matchend(expr, '^\s*(', 1)
+    " Assume it is casting conversion
+    if idx != -1
+      let typename = strpart(expr, idx, s:GetMatchedIndexEx(expr, idx, '(', ')')-idx)
+      let expr = strpart(expr, s:GetMatchedIndexEx(expr, 0, '(', ')')+2)
+      " "((Object)o).|" or "((Object)o.getCanonicalName()).|"
+      if empty(expr)
+	return s:GetMemberList(typename)
+
+      " "((Object)o).getClass().|"
+      else
+	let fqn = s:GetFQN(typename)
+	if (fqn != '')
+	  let fqn = s:GetNextSubexprType(fqn, expr)
+	  if (fqn != '')
+	    return s:GetMemberList(fqn)
+	  endif
+	endif
+      endif
+    else
+      " "(o).getClass().|" --> "o.getClass().|"
+      let idx = s:GetMatchedIndexEx(expr, 0, '(', ')')
+      let expr = strpart(expr, 1, idx-1) . strpart(expr, idx+1)
+    endif
+  endif
+
+  let isnew = expr =~ '^new\>'
+  if isnew
+    let typename = substitute(expr, '^new\s*\([a-zA-Z_$. \t\r\n]\+\)(.*$', '\1', '')
+  endif
+
+  " prepend 'this.' if it is a local method. e.g.
+  " 	getFoo() --> 	this.getFoo()
+  " 	getFoo().foo() --> 	this.getFoo().foo()
+  if expr =~ ')\s*$' && !isnew && (stridx(expr, '.') == -1 || stridx(expr, '.') > stridx(expr, '('))
+    let expr = 'this.' . expr
+  endif
+
+
   let list = []
   " Simple expression without dot.
   " Assumes in the following order:
+  "    -1) "new String().|"	- new instance
   "	0) "int.|"	- builtin types
   "	1) "str.|"	- Simple variable declared in the file
   "	2) "String.|" 	- Type (whose definition is imported)
   "	3) "java.|"   	- First part of the package name
   if (stridx(expr, '.') == -1)
+    if isnew
+      call s:Info('S. "new String().|"')
+      return s:GetMemberList(typename)
+    endif
+
     call s:Info('S0. "int.|" or "void.|"')
     if s:IsBuiltinType(expr) || expr == 'void'
       return [{'word': 'class', 'abbr': 'class', 'menu': 'Class'}]
@@ -326,8 +373,11 @@ function! s:CompleteAfterDot()
   "	2) "obj.var.|"		- An object's field
   "	3) "obj.getStr().|"	- An method's result
   "	   "getFoo()"	== "this.getFoo()"
+  "	   "getFoo().foo()"	== "this.getFoo().foo()"
   "	   "int.class.toString().|"
   "	   "list.toArray().|"
+  "	   "new ZipFile(path).|entries().|"
+  "	   "(new ZipFile(path)).|entries().|"
   "							  
   "	4) "System.in.|"	- A static field of a type (System)
   "	5) "System.getenv().|"	- Return value of static method getEnv()
@@ -338,13 +388,7 @@ function! s:CompleteAfterDot()
   "	8) "java.lang.|"		- Part or Full package name
   "
   else
-    " prepend 'this.' if it is a local method. e.g.
-    " 	getFoo() --> 	this.getFoo()
-    if (stridx(expr, '.') == -1 && expr =~ ')\s*$')
-      let expr = 'this.' . expr
-    endif
-
-    if expr =~ ')\s*$'
+    if expr !~ ')\s*$'
       " 0.
       call s:Info('C0. "int.class.|" or "Integer.class.|"')
       if expr =~# '\.class$'
@@ -381,7 +425,7 @@ function! s:CompleteAfterDot()
     endif
 
     " 2|3. 
-    let classname = s:GetDeclaredClassName(first)
+    let classname = isnew ? typename : s:GetDeclaredClassName(first)
     call s:Info('C2|3. "obj.var.|", or "sb.append().|"  classname: "' . classname . '" for "' . first . '"')
     if (classname != '')
       if s:IsBuiltinType(classname)
@@ -463,14 +507,18 @@ function! s:GetStatement()
   let lnum_old = line('.')
   let col_old = col('.')
 
-  if search('[{;]', 'bW') == 0
-    let lnum = 1
-    let col  = 1
-  else
-    normal w
-    let lnum = line('.')
-    let col = col('.')
-  endif
+  while 1
+    if search('[{;]', 'bW') == 0
+      let lnum = 1
+      let col  = 1
+      break
+    elseif synIDattr(synID(line('.'), col('.'), 1), "name") !~? '\(Comment\|String\|Character\)'
+      normal w
+      let lnum = line('.')
+      let col = col('.')
+      break
+    endif
+  endwhile
 
   silent call cursor(lnum_old, col_old)
   return s:MergeLines(lnum, col, lnum_old, col_old)
@@ -518,7 +566,9 @@ fu! s:ExtractCleanExpr(expr)
     let char = cmd[pos]
   endwhile
   if (char !~ '[a-zA-Z0-9_]')
-    let cmd = strpart(cmd, pos+1)
+    " look back for "new"
+    let idx = match(strpart(cmd, 0, pos), '\<new[ \t\r\n]*$')
+    let cmd = strpart(cmd, idx != -1 ? idx : pos+1)
   endif
   return cmd
 endfu
@@ -837,7 +887,7 @@ function! s:GetNextSubexprType(fqn, expr)
   call s:WatchVariant('resulttype: ' . resulttype)
 
 
-  if strlen(tail_expr) == 0 || resulttype == '' || s:IsBuiltinType(resulttype)
+  if empty(tail_expr) || resulttype == '' || s:IsBuiltinType(resulttype) || resulttype == 'void'
     return resulttype
   else
     return s:GetNextSubexprType(resulttype, tail_expr)
@@ -1039,7 +1089,9 @@ fu! s:SearchNameInAST(tree, name, targetPos)
 	endif
 	
       elseif stat.tag == 'FORLOOP'
-	let matchs += s:SearchNameInAST(stat.init, a:name, a:targetPos)
+	for item in stat.init
+	  let matchs += s:SearchNameInAST(item, a:name, a:targetPos)
+	endfor
 	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
 
       elseif stat.tag == 'WHILELOOP'
