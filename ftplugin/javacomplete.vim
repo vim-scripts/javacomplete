@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76.5
+" Version:	0.76.6
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-21
+" Last Change:	2007-08-23
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -272,12 +272,6 @@ function! s:CompleteAfterDot()
   let expr = strpart(b:dotexpr, 0, strlen(b:dotexpr)-1)
   let expr = s:Trim(expr)	" trim head and tail spaces
 
-  " 0. String literal
-  call s:Info('P0. "str".|')
-  if expr =~  '"$'
-    return s:GetMemberList("java.lang.String")
-  endif
-
   let typename = ''
   if expr =~ '^('
     let idx = matchend(expr, '^\s*(', 1)
@@ -304,6 +298,12 @@ function! s:CompleteAfterDot()
       let idx = s:GetMatchedIndexEx(expr, 0, '(', ')')
       let expr = strpart(expr, 1, idx-1) . strpart(expr, idx+1)
     endif
+  endif
+
+  " 0. String literal
+  call s:Info('P0. "str".|')
+  if expr =~  '"$'
+    return s:GetMemberList("java.lang.String")
   endif
 
   let isnew = expr =~ '^new\>'
@@ -511,13 +511,16 @@ function! s:GetStatement()
     if search('[{;]', 'bW') == 0
       let lnum = 1
       let col  = 1
-      break
-    elseif synIDattr(synID(line('.'), col('.'), 1), "name") !~? '\(Comment\|String\|Character\)'
+    else
+      if s:InCommentOrLiteral(line('.'), col('.'))
+	continue
+      endif
+
       normal w
       let lnum = line('.')
       let col = col('.')
-      break
     endif
+    break
   endwhile
 
   silent call cursor(lnum_old, col_old)
@@ -526,22 +529,19 @@ endfunction
 
 fu! s:MergeLines(lnum, col, lnum_old, col_old)
   let lnum = a:lnum
-  "echoerr 'lnum_old ' . a:lnum_old . ' col_old: ' . a:col_old . ' lnum: ' . lnum. ' col: ' . a:col
+  let col = a:col
 
-  " Merge lines into a string, and remove comments, trim spaces
-  if lnum == a:lnum_old
-    let str = substitute(strpart(getline(a:lnum_old), a:col-1, a:col_old-a:col), '^\s*', '', '')
-  else
+  let str = ''
+  if lnum < a:lnum_old
     let str = s:Prune(strpart(getline(lnum), a:col-1))
     let lnum += 1
     while lnum < a:lnum_old
-      let str = str . s:Prune(getline(lnum))
+      let str  .= s:Prune(getline(lnum))
       let lnum += 1
     endwhile
-    if lnum == a:lnum_old
-      let str = str . substitute(strpart(getline(a:lnum_old), 0, a:col_old-1), '^\s*', '', '')
-    endif
-  end
+    let col = 1
+  endif
+  let str .= s:Prune(strpart(getline(a:lnum_old), col-1, a:col_old-col), col)
   let str = substitute(str, '\s\+', ' ', '')
   let str = substitute(str, '\.[ \t]\+', '.', 'g')
   return str
@@ -1510,8 +1510,16 @@ fu! s:KeepCursor(cmd)
   call cursor(lnum_old, col_old)
 endfu
 
+fu! s:InCommentOrLiteral(line, col)
+  if has("syntax")
+    return synIDattr(synID(a:line, a:col, 1), "name") =~? '\(Comment\|String\|Character\)'
+  endif
+endfu
+
 function! s:InComment(line, col)
-  return synIDattr(synID(a:line, a:col, 1), "name") =~? 'comment'
+  if has("syntax")
+    return synIDattr(synID(a:line, a:col, 1), "name") =~? 'comment'
+  endif
 "  if getline(a:line) =~ '\s*\*'
 "    return 1
 "  endif
@@ -1522,57 +1530,60 @@ function! s:InComment(line, col)
 "  return 0
 endfunction
 
-" remove comments, trim spaces
-" test case: ' 	sb.append( )	// comment '
-function! s:Prune(str)
-  let idx = strridx(a:str, '//')
-  if idx >= 0
-    let str = strpart(a:str, 0, idx)
-  else
-    let str = a:str
-  endif
+" set string literal empty, remove comments, trim begining or ending spaces
+" test case: ' 	sb. /* block comment*/ append( "stringliteral" ) // comment '
+function! s:Prune(str, ...)
+  let str = substitute(a:str, '"\(\\\(["\\''ntbrf]\)\|[^"]\)*"', '""', 'g')
+  let str = substitute(str, '\/\/.*', '', 'g')
+  let str = s:RemoveBlockComments(str)
   let str = substitute(str, '^\s*', '', '')
-  let str = substitute(str, '\s*$', '', '')
+  if a:0 == 0
+    let str = substitute(str, '\s*$', '', '')
+  endif
   return str
 endfunction
+
+" Given argument, replace block comments with spaces of same number
+fu! s:RemoveBlockComments(str, ...)
+  let result = a:str
+  let ib = match(result, '\/\*')
+  let ie = match(result, '\*\/')
+  while ib != -1 && ie != -1 && ib < ie
+    let result = strpart(result, 0, ib) . (a:0 == 0 ? ' ' : repeat(' ', ie-ib+2)) . result[ie+2: ]
+    let ib = match(result, '\/\*')
+    let ie = match(result, '\*\/')
+  endwhile
+  return result
+endfu
 
 fu! s:Trim(str)
   let str = substitute(a:str, '^\s*', '', '')
   return substitute(str, '\s*$', '', '')
 endfu
 
-" TODO: take match pair used in string, like 
+" TODO: search pair used in string, like 
 " 	'create(ao.fox("("), new String).foo().'
 function! s:GetMatchedIndexEx(str, idx, one, another)
   let pos = a:idx
-  let len = strlen(a:str)
-  let char = a:str[pos]
-  while char != a:another
-    if pos >= len
-      return -1
-    endif
-    let pos = pos + 1
-    let char = a:str[pos]
-    "echo char
-    if (char == a:one)
-      let pos = s:GetMatchedIndexEx(a:str, pos, a:one, a:another)
-      if pos == -1
-	return -1
+  while 0 <= pos && pos < len(a:str)
+    let pos = match(a:str, '['. a:one . a:another .']', pos+1)
+    if pos != -1
+      if a:str[pos] == a:one
+	let pos = s:GetMatchedIndexEx(a:str, pos, a:one, a:another)
+      elseif a:str[pos] == a:another
+	break
       endif
     endif
   endwhile
-  return pos
+  return 0 <= pos && pos < len(a:str) ? pos : -3
 endfunction
 
 function! s:GetMatchedIndex(str, idx)
-  let str = a:str
   let pos = a:idx
-  let char = str[pos]
-  while (char != '(')
-    let pos = pos - 1
-    let char = str[pos]
-    if (char == ')')
-      let pos = s:GetMatchedIndex(str, pos)
+  while pos >= 0 && a:str[pos] != '('
+    let pos -= 1
+    if (a:str[pos] == ')')
+      let pos = s:GetMatchedIndex(a:str, pos-1)-1
     endif
   endwhile
   return pos

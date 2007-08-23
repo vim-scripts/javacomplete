@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-21
-" Version:	0.64
+" Last Changed: 2007-08-23
+" Version:	0.65
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.64'
+let g:loaded_javaparser = 'v0.65'
 
 
 " Constants used by scanner and parser					{{{1
@@ -42,7 +42,7 @@ let s:RE_FORMAL_PARAM_LIST	= s:RE_FORMAL_PARAM . '\(\s*,\s*' . s:RE_FORMAL_PARAM
 let s:RE_FORMAL_PARAM2		= '^\s*\(final\s*\)\=\('. s:RE_TYPE . '\)\s\+\(' . s:RE_IDENTIFIER . '\)' . s:RE_BRACKETS . '*'
 
 let s:RE_MEMBER_MODS		= '\(PUBLIC\|PROTECTED\|PRIVATE\|ABSTRACT\|STATIC\|FINAL\|TRANSIENT\|VOLATILE\|SYNCHRONIZED\|NATIVE\|STRICTFP\)'
-let s:RE_MEMBER_HEADER		= '\s*\(\(' .s:RE_MEMBER_MODS. '\s\+\)\+\)\([a-zA-Z_$][a-zA-Z0-9_$]*\(\s*\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\)*\)\(\s*\[\s*\]\)\=\s\+\([a-zA-Z_$][a-zA-Z0-9_$]*\)'
+let s:RE_MEMBER_HEADER		= '\s*\(\(' .s:RE_MEMBER_MODS. '\s\+\)\+\)\(' .s:RE_IDENTIFIER. '\(\s*\.\s*' .s:RE_IDENTIFIER. '\)*\)\(\s*\[\s*\]\)\=\s\+\(' .s:RE_IDENTIFIER. '\)'
 
 " API								{{{1
 
@@ -347,42 +347,11 @@ fu! s:nextToken()
       return
 
     elseif b:ch == '/'
-      call s:scanChar()
-      " line comment
-      if b:ch == '/'
-	let b:token = 'LINECOMMENT'
-	call s:Info('line comment')
-	call s:scanChar()
-	call s:SkipLineComment()
-	let b:endPos = b:bp
+      let status = s:scanComment()
+      if status == 1
 	continue
-
-      " classic comment
-      " test cases: /**/, /***/, /*******/, /*** astatement; /***/, /*/
-      elseif b:ch == '*'
-	let b:token = 'BLOCKCOMMENT'
-	call s:Info('block comment')
-	call s:scanChar()
-	let time = reltime()
-	" javadoc
-	if b:ch == '*'
-	  let b:docComment = s:scanDocComment()
-	" normal comment
-	else
-	  call s:skipComment()
-	endif
-	let b:et_perf .= "\r" . 'comment ' . reltimestr(reltime(time))
-
-	if b:ch == '/'
-	  call s:Info('end block comment')
-	  call s:scanChar()
-	  let b:endPos = b:bp
-	  continue
-	else
-	  call s:LexError('unclosed.comment')
-	  return
-	endif
-
+      elseif status == 2
+	return
       elseif b:ch == '='
 	let b:name = '/='
 	let b:token = 'SLASHEQ'
@@ -730,15 +699,16 @@ fu! s:IsSpecial(ch)
 endfu
 
 " scan comment							{{{2
+" return 0 - not comment, 1 - succeeded to scan comment, 2 - unclosed comment
 fu! s:scanComment()
   call s:scanChar()
   " line comment
   if b:ch == '/'
     let b:token = 'LINECOMMENT'
     call s:Info('line comment')
-    call s:scanChar()
     call s:SkipLineComment()
-    return
+    let b:endPos = b:bp
+    return 1
 
   " classic comment
   " test cases: /**/, /***/, /*******/, /*** astatement; /***/, /*/
@@ -759,21 +729,25 @@ fu! s:scanComment()
     if b:ch == '/'
       call s:Info('end block comment')
       call s:scanChar()
+      let b:endPos = b:bp
+      return 1
     else
       call s:LexError('unclosed.comment')
+      return 2
     endif
   endif
+  return 0
 endfu
 
 fu! s:SkipLineComment()
   " OAO optimized code
-  if b:ch != "\r"
     let b:ch = "\r"
     let b:line += 1
     let b:col = 0
     let b:bp = b:idxes[b:line] + b:col
-  endif
+
   " OLD 
+  "call s:scanChar()
   "while (b:ch != "\r")
   "  call s:scanChar()
   "endwhile
@@ -907,6 +881,7 @@ fu! s:LexError(key, ...)
   call s:Log(4, b:pos, '[lex error]:' . s:Pos2Str(pos) . ': ' . a:key)
 endfu
 
+" Scanner Helper							{{{1
 " gotoMatchEnd								{{{2
 fu! s:gotoMatchEnd(one, another, ...)
   while b:bp < b:buflen
@@ -994,17 +969,11 @@ fu! s:gotoSemi()
   endwhile
 endfu
 
-" Scanner Helper							{{{1
+" s:Strpart(), s:Stridx(), s:Match()					{{{2
 fu! Strpart(start, len)
-  let startline = s:GetLine(a:start)
-  let endline   = s:GetLine(a:start + a:len)
-  let str = ''
-  let l = startline
-  while l < endline
-    let str .= b:lines[l]
-    let l += 1
-  endwhile
-  let str .= b:lines[endline]
+  let startline = java_parser#DecodePos(a:start).line
+  let endline   = java_parser#DecodePos(a:start + a:len).line
+  let str = join(b:lines[startline:endline-1]) . b:lines[endline]
   return strpart(str, a:start-b:idxes[startline], a:len)
 endfu
 
@@ -1063,6 +1032,7 @@ fu! s:Match(pat)
 endfu
 
 
+" conversion between position and (line, col)				{{{2
 fu! java_parser#MakePos(line, col)
   return b:idxes[a:line] + a:col
 endfu
@@ -1077,14 +1047,6 @@ fu! java_parser#DecodePos(pos)
   endfor
   let col = a:pos - b:idxes[line]
   return {'line': line, 'col': col}
-endfu
-
-fu! s:GetLine(pos)
-  return java_parser#DecodePos(a:pos).line
-endfu
-
-fu! s:GetCol(pos)
-  return java_parser#DecodePos(a:pos).col
 endfu
 
 fu! s:Pos2Str(pos)
@@ -1110,83 +1072,34 @@ endfu
 
 " bit operator &
 fu! s:BitAnd(n1, n2)
-  return s:Bits2Number( s:BitAnd_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2)) )
-endfu
-
-fu! s:BitAnd_binary(n1, n2)
-  let n1 = a:n1
-  let n2 = a:n2
-
-  let len1 = len(n1)
-  let len2 = len(n2)
-  let len  = len1
-  if len1 > len2
-    let n2 = repeat('0', len1-len2) . n2
-  else
-    let len = len2
-    let n1 = repeat('0', len2-len1) . n1
-  endif
-
-  let i = 0
-  let bits = ''
-  while i < len
-    if n1[i] == '1' && n2[i] == '1'
-      let bits .= '1'
-    else
-      let bits .= '0'
-    endif
-    let i += 1
-  endwhile
-  return bits
+  if a:n1 == 0 || a:n2 == 0	| return 0 | endif
+  if a:n1 == a:n2		| return 1 | endif
+  return s:Bits2Number( s:BitOperator_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2), 'n1[i] == "1" && n2[i] == "1"') )
 endfu
 
 " bit operator |
 fu! s:BitOr(n1, n2, ...)
-  let result = s:BitOr_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2))
+  if a:0 == 0
+    if a:n1 == 0
+      return a:n2
+    elseif a:n2 == 0
+      return a:n1
+    endif
+  endif
+  let result = s:BitOperator_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2), 'n1[i] == "1" || n2[i] == "1"')
   for a in a:000
-      let result = s:BitOr_binary(result, a)
+      let result = s:BitOperator_binary(result, s:Number2Bits(a), 'n1[i] == "1" || n2[i] == "1"')
   endfor
   return s:Bits2Number( result )
 endfu
 
-fu! s:BitOr_binary(n1, n2, ...)
-  let n1 = a:n1
-  let n2 = a:n2
-
-  let len1 = len(n1)
-  let len2 = len(n2)
-  let len  = len1
-  if len1 > len2
-    let n2 = repeat('0', len1-len2) . n2
-  else
-    let len = len2
-    let n1 = repeat('0', len2-len1) . n1
-  endif
-
-  let i = 0
-  let bits = ''
-  while i < len
-    if n1[i] == '1' || n2[i] == '1'
-      let bits .= '1'
-    else
-      let bits .= '0'
-    endif
-    let i += 1
-  endwhile
-
-  for a in a:000
-      let bits = s:BitOr_binary(bits, a)
-  endfor
-
-  return bits
-endfu
-
 " bit operator ^
 fu! s:BitXor(n1, n2)
-  return s:Bits2Number( s:BitXor_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2)) )
+  if a:n1 == a:n2	| return 0 | endif
+  return s:Bits2Number( s:BitOperator_binary(s:Number2Bits(a:n1), s:Number2Bits(a:n2), 'n1[i] != n2[i]') )
 endfu
 
-fu! s:BitXor_binary(n1, n2)
+fu! s:BitOperator_binary(n1, n2, comparator)
   let n1 = a:n1
   let n2 = a:n2
 
@@ -1203,11 +1116,7 @@ fu! s:BitXor_binary(n1, n2)
   let i = 0
   let bits = ''
   while i < len
-    if n1[i] == n2[i]
-      let bits .= '0'
-    else
-      let bits .= '1'
-    endif
+    let bits .= eval(a:comparator) ? '1' : '0'
     let i += 1
   endwhile
   return bits
@@ -1254,17 +1163,15 @@ fu! s:Bits2Number(bits)
 endfu
 
 
-let s:modifier_keywords = ['public', 'private', 'protected', 'static', 'final', 'synchronized', 'volatile', 'transient', 'native', 'interface', 'strictfp', 'abstract']
+let s:modifier_keywords = ['strictfp', 'abstract', 'interface', 'native', 'transient', 'volatile', 'synchronized', 'final', 'static', 'protected', 'private', 'public']
 fu! s:String2Flags(str)
   let mod = [0,0,0,0,0,0,0,0,0,0,0,0,]
-  let i = 1
-  while i <= len(s:modifier_keywords)
-      if a:str =~? s:modifier_keywords[i-1]
-	  let mod[-i] = '1'
+  for item in split(a:str, '\s\+')
+      if index(s:modifier_keywords, item) != -1
+	  let mod[index(s:modifier_keywords, item)] = '1'
       endif
-      let i += 1
-  endwhile
-  return substitute(join(mod, ''), '^0*', '', '')
+  endfor
+  return join(mod[index(mod, '1'):], '')
 endfu
 
 " Log utilities							{{{1
@@ -2579,9 +2486,7 @@ fu! s:catchClause()
   let pos = b:pos
   call s:accept('CATCH')
   call s:accept('LPAREN')
-  let mods = s:modifiersOpt()
-  let mods.flags = s:BitOr_binary(s:Number2Bits(mods.flags), s:Flags.PARAMETER)
-  let formal = s:variableDeclaratorId(mods, s:qualident())
+  let formal = s:variableDeclaratorId(s:optFinalParameter(), s:qualident())
   call s:accept('RPAREN')
   let body = s:block()
   return {'tag': 'CATCH', 'pos': pos, 'endpos': b:pos, 'param': formal, 'body': body}
@@ -2634,7 +2539,7 @@ fu! s:forInit()
   if b:token == 'FINAL' || b:token == 'MONKEYS_AT'
     return s:variableDeclarators(Java_optFinal(0), s:type(), stats)
   else
-    let t = s:term(s:BitOr(s:EXPR, s:TYPE))
+    let t = s:term(s:EXPR_OR_TYPE)
     if s:BitAnd(b:lastmode, s:TYPE) && b:token =~# '^\(IDENTIFIER\|ASSERT\|ENUM\)$'
       return s:variableDeclarators(s:modifiersOpt(), t, stats)
     else
@@ -2669,9 +2574,9 @@ fu! s:modifiersOpt(...)
     else
       break
     endif
-    if s:BitAnd(flags, flag) != 0
-      "log.error(S.pos(), "repeated.modifier")
-    endif
+    "if s:BitAnd(flags, flag) != 0
+    "  "log.error(S.pos(), "repeated.modifier")
+    "endif
 
     let lastPos = b:pos
     call s:nextToken()
@@ -2856,10 +2761,9 @@ fu! s:importDeclaration()
   let idx = matchend(b:lines[b:line], '\(\s\+static\>\)\?\s\+\([_$a-zA-Z][_$a-zA-Z0-9_]*\)\(\s*\.\s*[_$a-zA-Z][_$a-zA-Z0-9_]*\)*\(\s*\.\s*\*\)\?;')
   if idx != -1
     let fqn = strpart(b:lines[b:line], b:col, idx-b:col-1)
-    let b:col = idx-1
+    let b:col = idx
     let b:bp = b:idxes[b:line] + b:col
     call s:nextToken()
-    call s:accept('SEMI')
     return fqn
   endif
   endif
@@ -3196,74 +3100,26 @@ fu! s:classOrInterfaceBodyDeclaration(classname, isInterface)
   endif
 endfu
 
+" OAO: short way for common declaration of field or method, not for generic type yet.
 fu! s:classOrInterfaceBodyDeclaration_opt(classname, isInterface)
-  " OAO: short way for common declaration of field or method, not for generic type yet.
-  if b:token =~# '^' .s:RE_MEMBER_MODS. '$' && b:lines[b:line] !~ '/\*'
     let str = b:lines[b:line]
     let idx = matchend(str, s:RE_MEMBER_HEADER)
     if idx != -1
-      let s = strpart(str, 0, idx)
-      let name_ = substitute(s, s:RE_MEMBER_HEADER, '\7', '')
-      let type_ = substitute(s, s:RE_MEMBER_HEADER, '\4', '')
-      let flag_ = s:String2Flags(substitute(s, s:RE_MEMBER_HEADER, '\1', ''))
+      let subs = split(substitute(strpart(str, 0, idx), s:RE_MEMBER_HEADER, '\1;\4;\7', ''), ';')
+      let name_ = subs[2]
+      let type_ = subs[1]
+      let flag_ = s:String2Flags(subs[0])
 
 "      if type_ =~# '^\(class\|interface\|enum\)$'
 "	 return [s:classOrInterfaceOrEnumDeclaration(mods, dc)]
 "      else
 	" methodDeclarator
-	let idx = matchend(str, '^\s*[=;(]', idx)-1
+	let idx = matchend(str, '^\s*[,=;(]', idx)-1
 	if str[idx] == '('
-	  let methoddef = {'tag': 'METHODDEF', 'pos': b:pos, 'name': name_, 'n': name_, 'm': flag_, 'r': type_}
-
-	  let idxend = matchend(str, '^\s*)', idx+1)
-	  if idxend == -1
-	    let idxend = matchend(str, '(\s*' . s:RE_FORMAL_PARAM_LIST . '\s*)', idx)
-	  endif
-	  if idxend == -1
-	    return
-	  endif
-	  let params = strpart(str, idx+1, idxend-idx-2)
-	  let methoddef.params = []
-	  for item in split(params, ',')
-	    let param = {'tag': 'VARDEF', 'pos': -1}
-	    let param.name = substitute(item, s:RE_FORMAL_PARAM2, '\5', '')
-	    let param.vartype = substitute(substitute(item, s:RE_FORMAL_PARAM2, '\2', ''), ' ', '', 'g')
-	    call add(methoddef.params, param)
-	  endfor
-
-	  let idx = matchend(str, s:RE_THROWS, idxend)
-	  if idx != -1
-	    "let throws = strpart(str, idxend, idx-idxend)
-	  endif
-
-	  " in interface
-	  let idx = matchend(str, '\s*;', idx)
-	  if idx != -1
-	    let b:token = 'SEMI'
-	    let b:col = idx
-	    let b:bp = b:idxes[b:line] + b:col
-	    let b:pos = b:bp - 1
-	    let methoddef.d = substitute(str, '^\s*\([^{]*\)\s*;\=$', '\1', '')
+	  let methoddef = s:methodDeclaratorRest_opt(b:pos, flag_, type_, name_, [], a:isInterface, type_ == 'void', '', str, idx)
+	  if !empty(methoddef)
 	    return [methoddef]
 	  endif
-
-	  let idx = matchend(str, '\s*{', idx)
-	  if idx == -1
-	    let idx = matchend(b:lines[b:line+1], '^\s*{')
-	    if idx != -1
-	      let b:line += 1
-	    endif
-	  endif
-	  if idx != -1
-	    let b:token = 'LBRACE'
-	    let b:col = idx
-	    let b:bp = b:idxes[b:line] + b:col
-	    let b:pos = b:bp - 1
-	    let methoddef.d = substitute(str, '^\s*\([^{]*\)\s*{\=$', '\1', '')
-	    let methoddef.body = s:block(b:pos, 0, b:scanStrategy < 1)
-	    return [methoddef]
-	  endif
-
 
 	" variableDeclarator
 	elseif str[idx] =~ '[=;]'
@@ -3272,11 +3128,47 @@ fu! s:classOrInterfaceBodyDeclaration_opt(classname, isInterface)
 	  call s:accept('SEMI')
 	  let vardef.pos_end = b:pos
 	  return [vardef]
-	"elseif str[idx] =~ ','		" variableDeclarators
+
+	" variableDeclarators
+	elseif str[idx] == ','
+	  let ie = matchend(str, '^\(,\s*'. s:RE_IDENTIFIER .'\s*\)*;', idx)
+	  if ie != -1
+	    let vardef = {'tag': 'VARDEF', 'pos': b:pos, 'name': name_, 'n': name_, 'vartype': type_, 't': type_, 'm': flag_}
+	    let vars = [vardef]
+	    for item in split(substitute(strpart(str, idx+1, ie-idx-2), '\s', '', 'g'), ',')
+	      let vardef = copy(vardef)
+	      let vardef.name = item
+	      let vardef.n = item
+	      call add(vars, vardef)
+	    endfor
+	    let b:col = ie
+	    let b:bp = b:idxes[b:line] + b:col
+	    call s:nextToken()
+	    return vars
+	  endif
 	endif
 "      endif
     endif
-  endif
+
+    let RE_CTOR_HEADER = '^\s*\(\(public\|protected\|private\)\s\+\)\=\C' .a:classname. '\s*('
+    let ie = matchend(str, RE_CTOR_HEADER)
+    if ie != -1 && !a:isInterface
+      let flag_ = s:String2Flags(substitute(strpart(str, 0, ie), RE_CTOR_HEADER, '\1', ''))
+      let methoddef = s:methodDeclaratorRest_opt(b:pos, flag_, a:classname, a:classname, [], a:isInterface, 1, '', str, ie-1)
+      if !empty(methoddef)
+	return [methoddef]
+      endif
+    endif
+
+    let RE_METHOD_HEADER = '^\s*\(' .s:RE_IDENTIFIER. '\%(\s*\.\s*' .s:RE_IDENTIFIER. '\)*\%(\s*\[\s*\]\)\=\)\s\+\(' .s:RE_IDENTIFIER. '\)\s*('
+    let ie = matchend(str, RE_METHOD_HEADER)
+    if ie != -1
+      let subs = split(substitute(strpart(str, 0, ie), RE_METHOD_HEADER, '\1;\2', ''), ';')
+      let methoddef = s:methodDeclaratorRest_opt(b:pos, 0, subs[0], subs[1], [], a:isInterface, subs[0] == 'void', '', str, ie-1)
+      if !empty(methoddef)
+	return [methoddef]
+      endif
+    endif
 endfu
 
 
@@ -3295,10 +3187,6 @@ fu! s:methodDeclaratorRest(pos, mods, type, name, typarams, isInterface, isVoid,
 
   " parameters
   let methoddef.params = s:formalParameters()
-  "let pos_begin = b:bp
-  "let pos_end = s:gotoMatchEnd('(', ')')
-  "let methoddef.p = Strpart(pos_begin-1, pos_end-pos_begin)
-  "call s:nextToken()
 
   " BracketsOpt
   if !a:isVoid
@@ -3342,7 +3230,74 @@ fu! s:methodDeclaratorRest(pos, mods, type, name, typarams, isInterface, isVoid,
   return methoddef
 endfu
 
+" method header declared in one line, 
+" NOTE: RE_FORMAL_PARAM_LIST do not recognize varargs and nested comments
+fu! s:methodDeclaratorRest_opt(pos, mods, type, name, typarams, isInterface, isVoid, dc, str, idx)
+  let str = a:str
+  let idx = a:idx
 
+  " params
+  let idxend = matchend(str, '^(\s*)', idx)	" no params
+  if idxend == -1
+    let idxend = matchend(str, '^(\s*' . s:RE_FORMAL_PARAM_LIST . '\s*)', idx)
+  endif
+  if idxend == -1
+    return
+  endif
+
+  let methoddef = {'tag': 'METHODDEF', 'pos': a:pos, 'name': a:name, 'n': a:name, 'm': a:mods, 'r': a:type}
+
+  " params
+  let methoddef.params = []
+  let s = strpart(str, idx+1, idxend-idx-2)
+  if s !~ '^\s*$'
+    for item in split(s, ',')
+      let subs = split(substitute(item, s:RE_FORMAL_PARAM2, '\2;\5', ''), ';')
+      let param = {'tag': 'VARDEF', 'pos': -1}
+      let param.name = subs[1]
+      let param.vartype = substitute(subs[0], ' ', '', 'g')
+      let param.m = s:Flags.PARAMETER
+      call add(methoddef.params, param)
+    endfor
+  endif
+
+  " throws
+  let idx2 = matchend(str, '^\s*' . s:RE_THROWS, idxend)
+  let idx = idx2 == -1 ? idxend : idx2
+  if idx2 != -1
+    "let throws = strpart(str, idxend, idx-idxend)
+  endif
+
+  " in interface
+  if a:isInterface
+    let idx = matchend(str, '^\s*;', idx)
+    if idx != -1
+      let b:token = 'SEMI'
+      let b:col = idx
+      let b:bp = b:idxes[b:line] + b:col
+      let b:pos = b:bp - 1
+      let methoddef.d = substitute(str, '^\s*\([^{]*\)\s*;\=$', '\1', '')
+      return methoddef
+    endif
+  endif
+
+  let idx = matchend(str, '^\s*{', idx)
+  if idx == -1
+    let idx = matchend(b:lines[b:line+1], '^\s*{')
+    if idx != -1
+      let b:line += 1
+    endif
+  endif
+  if idx != -1
+    let b:token = 'LBRACE'
+    let b:col = idx
+    let b:bp = b:idxes[b:line] + b:col
+    let b:pos = b:bp - 1
+    let methoddef.d = substitute(str, '^\s*\([^{]*\)\s*{\=$', '\1', '')
+    let methoddef.body = s:block(b:pos, 0, b:scanStrategy < 1)
+    return methoddef
+  endif
+endfu
 
 " VariableDeclarators = VariableDeclarator { "," VariableDeclarator }	{{{2
 fu! s:variableDeclarators(mods, type, vdefs)
@@ -3382,23 +3337,16 @@ fu! s:variableDeclaratorRest(pos, mods, type, name, reqInit, dc)
     echo '[syntax error]:' . s:token2string('EQ') . " expected"
   endif
 
-"  " simple way: search forward for ';', but ingore other comma-separated varibles
-"  if b:token !=# 'SEMI'
-"    call s:gotoSemi()
-"  endif
-
   let vardef.endpos = b:pos
   return vardef
 endfu
 
 fu! s:variableDeclaratorId(mods, type)
-  let type = a:type
-  let pos = b:pos
-  let name = s:ident()
-  if s:BitAnd_binary(a:mods.flags, s:Flags.VARARGS) == 0
-    let type = s:bracketsOpt(type)
+  let vardef = s:VarDef(b:pos, a:mods, s:ident(), a:type)
+  if len(a:mods.flags) <= 34		" (a:mods.flags & s:Flags.VARARGS) == 0
+    let vardef.type = s:bracketsOpt(vardef.vartype)
   endif
-  return s:VarDef(pos, a:mods, name, type)
+  return vardef
 endfu
 
 " 									{{{2
@@ -3449,7 +3397,7 @@ fu! s:formalParameters()
   if b:token != 'RPAREN'
     let lastParam = s:formalParameter()
     call add(params, lastParam)
-    while b:token == 'COMMA' && s:BitAnd_binary(lastParam.mods.flags, s:Flags.VARARGS) == 0
+    while b:token == 'COMMA' && len(lastParam.mods.flags) <= 34		" (lastParam.mods.flags & s:Flags.VARARGS) == 0
       call s:nextToken()
       let lastParam = s:formalParameter()
       call add(params, lastParam)
@@ -3468,14 +3416,18 @@ fu! s:optFinal(flags)
   return mods
 endfu
 
-fu! s:formalParameter()
-  " OAO: optional FINAL
+" OAO: optional FINAL for parameter
+fu! s:optFinalParameter()
   let mods = {'tag': 'MODIFIERS', 'pos': b:pos, 'flags': s:Flags.PARAMETER, 'annotations': []}
   if b:token == 'FINAL'
     let mods.flags = '1000000000000000000000000000010000'
     call s:nextToken()
   endif
+  return mods
+endfu
 
+fu! s:formalParameter()
+  let mods = s:optFinalParameter()
   let type = s:type()
 
   if b:token == 'ELLIPSIS'

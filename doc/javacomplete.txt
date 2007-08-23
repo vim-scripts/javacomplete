@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 21
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 23
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -51,9 +51,10 @@ Filetype detection will set the omnifunction appropriately.
 
 1.2 Requirements				*javacomplete-requirements*
 
-It works on all the platforms where
-- Vim version 7.0 and above.
-- JDK version 1.1 and above. 
+It works on all the platforms wherever
+- Vim version 7.0 and above,
+- JDK version 1.1 and above, 
+existed.
 
 1.3 Download					*javacomplete-download*
 
@@ -289,6 +290,9 @@ The embedded parser works a bit slower than expected.
 
 6.1 javacomplete				*javacomplete-history*
 
+v0.76.6
+    2007-08-23	Improved GetStatement() and related. Bug fixed.
+
 v0.76.5
     2007-08-21
     -	Fixed bug: "foo().|", "getFoo().foo().|", 
@@ -372,6 +376,14 @@ v0.50 2007-01-21	Use java and Reflection.class directly.
 
 
 6.2 Parser					*java-parser-history*
+
+v0.65
+    2007-08-23
+    -	Improved s:scanComment(), s:Strpart(), s:String2Flags().
+    -	Improved recognizing methods, ctors, and variable declarators declared in most common form.
+    -	Added s:optFinalParameter(), s:methodDeclaratorRest_opt(). 
+    -	Removed s:GetLine() and s:GetCol().
+    -	Rewrote binary functions.
 
 v0.64
     2007-08-21
