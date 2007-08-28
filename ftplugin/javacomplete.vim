@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76.6
+" Version:	0.76.7
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-23
+" Last Change:	2007-08-28
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -13,8 +13,8 @@ let s:CONTEXT_AFTER_DOT		= 1
 let s:CONTEXT_METHOD_PARAM	= 2
 let s:CONTEXT_IMPORT		= 3
 let s:CONTEXT_IMPORT_STATIC	= 4
-let s:CONTEXT_INCOMPLETE_WORD	= 5
 let s:CONTEXT_PACKAGE_DECL	= 6 
+let s:CONTEXT_NEED_TYPE		= 7 
 let s:CONTEXT_OTHER 		= 0
 
 
@@ -48,6 +48,20 @@ let s:CLASS_ABBRS = {'Object': 'java.lang.Object',
 \	}
 let s:INVALID_FQNS = ['java', 'java.lang', 'com', 'org', 'javax']
 
+
+let s:RE_BRACKETS	= '\%(\[\s*\]\)'
+let s:RE_IDENTIFIER	= '[a-zA-Z_$][a-zA-Z0-9_$]*'
+let s:RE_QUALID		= s:RE_IDENTIFIER. '\%(\s*\.\s*' .s:RE_IDENTIFIER. '\)*'
+
+let s:RE_REFERENCE_TYPE	= s:RE_QUALID . s:RE_BRACKETS . '*'
+let s:RE_TYPE		= s:RE_REFERENCE_TYPE
+
+let s:RE_TYPE_ARGUMENT	= '\%(?\s\+\%(extends\|super\)\s\+\)\=' . s:RE_TYPE
+let s:RE_TYPE_ARGUMENTS	= '<' . s:RE_TYPE_ARGUMENT . '\%(\s*,\s*' . s:RE_TYPE_ARGUMENT . '\)*>'
+let s:RE_TYPE_WITH_ARGUMENTS_I	= s:RE_IDENTIFIER . '\s*' . s:RE_TYPE_ARGUMENTS
+let s:RE_TYPE_WITH_ARGUMENTS	= s:RE_TYPE_WITH_ARGUMENTS_I . '\%(\s*' . s:RE_TYPE_WITH_ARGUMENTS_I . '\)*'
+
+
 " local variables						{{{1
 let b:context_type = s:CONTEXT_OTHER
 "let b:statement = ''			" statement before cursor
@@ -79,138 +93,110 @@ function! javacomplete#Complete(findstart, base)
 
     let statement = s:GetStatement()
     call s:WatchVariant('statement: "' . statement . '"')
-    let valid = statement =~ '[."(0-9A-Za-z_]\s*$'
-    if statement =~ '\.\s*$'
-      let valid = statement =~ '[")0-9A-Za-z_\]]\s*\.\s*$' && statement !~ '\<\H\w\+\.\s*$' && statement !~ '\<\(abstract\|assert\|break\|case\|catch\|const\|continue\|default\|do\|else\|enum\|extends\|final\|finally\|for\|goto\|if\|implements\|import\|instanceof\|interface\|native\|new\|package\|private\|protected\|public\|return\|static\|strictfp\|switch\|synchronized\|throw\|throws\|transient\|try\|volatile\|while\|true\|false\|null\)\.\s*$'
-    endif
-    if !valid
-      return -1
-    endif
 
-    " import or package declaration
-    if statement =~# '^\s*\(import\|package\)\s\+'
-      let statement = substitute(statement, '\s\+\.', '.', 'g')
-      let statement = substitute(statement, '\.\s\+', '.', 'g')
-      if statement =~ '^\s*import\s\+'
-	let b:context_type = statement =~# '\<static\s\+' ? s:CONTEXT_IMPORT_STATIC : s:CONTEXT_IMPORT
-	let b:dotexpr = substitute(statement, '^\s*import\s\+\(static\s\+\)\?', '', '')
+    if statement =~ '[.0-9A-Za-z_]\s*$'
+      let valid = 1
+      if statement =~ '\.\s*$'
+	let valid = statement =~ '[")0-9A-Za-z_\]]\s*\.\s*$' && statement !~ '\<\H\w\+\.\s*$' && statement !~ '\<\(abstract\|assert\|break\|case\|catch\|const\|continue\|default\|do\|else\|enum\|extends\|final\|finally\|for\|goto\|if\|implements\|import\|instanceof\|interface\|native\|new\|package\|private\|protected\|public\|return\|static\|strictfp\|switch\|synchronized\|throw\|throws\|transient\|try\|volatile\|while\|true\|false\|null\)\.\s*$'
+      endif
+      if !valid
+	return -1
+      endif
+
+      let b:context_type = s:CONTEXT_AFTER_DOT
+
+      " import or package declaration
+      if statement =~# '^\s*\(import\|package\)\s\+'
+	let statement = substitute(statement, '\s\+\.', '.', 'g')
+	let statement = substitute(statement, '\.\s\+', '.', 'g')
+	if statement =~ '^\s*import\s\+'
+	  let b:context_type = statement =~# '\<static\s\+' ? s:CONTEXT_IMPORT_STATIC : s:CONTEXT_IMPORT
+	  let b:dotexpr = substitute(statement, '^\s*import\s\+\(static\s\+\)\?', '', '')
+	else
+	  let b:context_type = s:CONTEXT_PACKAGE_DECL
+	  let b:dotexpr = substitute(statement, '\s*package\s\+', '', '')
+	endif
+
+      " String literal
+      elseif statement =~  '"\s*\.\s*$'
+	let b:dotexpr = substitute(statement, '\s*\.\s*$', '\.', '')
+	return start - strlen(b:incomplete)
+
       else
-	let b:context_type = s:CONTEXT_PACKAGE_DECL
-	let b:dotexpr = substitute(statement, '\s*package\s\+', '', '')
+	" type declaration		NOTE: not supported generic yet.
+	let idx_type = matchend(statement, '^\s*\(\%(public\|protected\|private\|abstract\|static\|final\|strictfp\)\s\+\)*\(class\|interface\|enum\)\s\+[a-zA-Z_$][a-zA-Z0-9_$]*\s*')
+	if idx_type != -1
+	  let b:dotexpr = strpart(statement, idx_type)
+	  " return if not after extends or implements
+	  if b:dotexpr !~ '^\(extends\|implements\)\s\+'
+	    return -1
+	  endif
+	  let b:context_type = s:CONTEXT_NEED_TYPE
+	endif
+
+	let b:dotexpr = s:ExtractCleanExpr(statement)
       endif
 
       let idx_dot = strridx(b:dotexpr, '.')
-      " case: " import 	java.util.|"
-      if idx_dot == strlen(b:dotexpr)-1
-	let b:dotexpr = strpart(b:dotexpr, 0, strlen(b:dotexpr)-1)
-      " case: " import 	java.ut|"
-      elseif idx_dot != -1
-	let b:incomplete = strpart(b:dotexpr, idx_dot+1)
-	let b:dotexpr = strpart(b:dotexpr, 0, idx_dot)
-      " case: " import 	ja|"
-      "else
+      " case: " java.ut|" or " java.util.|"
+      if idx_dot != -1
+	let b:incomplete = b:dotexpr[idx_dot+1:]
+	let b:dotexpr = b:dotexpr[:idx_dot]
+      " case: " ja|"
+      else
+	let b:context_type = s:CONTEXT_OTHER
       endif
       return start - strlen(b:incomplete)
-    endif
 
-    let b:dotexpr = statement
-    call s:KeepCursor('call s:GenerateImports()')
 
     " method parameters, treat methodname or 'new' as an incomplete word
-    let len = strlen(statement)
-    if statement =~ '(\s*$'
+    elseif statement =~ '(\s*$'
+      " TODO: Need to exclude method declaration?
       let b:context_type = s:CONTEXT_METHOD_PARAM
       let pos = strridx(statement, '(')
       let s:padding = strpart(statement, pos+1)
-      let statement = strpart(statement, 0, pos)
-      let start = start - (len - pos)
+      let start = start - (len(statement) - pos)
 
-      " skip a word
-      let pos = pos - 1
-      while (pos != 0 && statement[pos] =~ '\w')
-	let pos = pos - 1
-      endwhile
-      let b:incomplete = statement
-      if pos > 0
-	" test case: expr.method(|)
-	if statement[pos] == '.'
-	  let b:dotexpr = strpart(statement, 0, pos+1)
-	  let b:incomplete = strpart(statement, pos+1)
+      let statement = substitute(statement, '\s*(\s*$', '', '')
+
+      " new ClassName?
+      let str = matchstr(statement, '\<new\s\+' . s:RE_QUALID . '$')
+      if str != ''
+	let str = substitute(str, '^new\s\+', '', '')
+	if !s:IsKeyword(str)
+	  let b:incomplete = '+'
+	  let b:dotexpr = str
+	  return start - len(b:dotexpr)
 	endif
 
-	" test special case: new ClassName(|)
-	if statement[pos] == ' ' && pos-3 >= 0
-	  let b:incomplete = strpart(statement, pos-3, 3)
-	  if b:incomplete == 'new'
-	    let b:dotexpr = strpart(statement, pos+1)
-	    " excluding 'new this()' or 'new super()'
-	    if b:dotexpr == 'this' || b:dotexpr == 'super'
-	      let b:dotexpr = ''
-	      let b:incomplete = ''
-	      return -1
-	    endif
-	    return start - strlen(b:dotexpr)
-	  endif
-	else
-	  let idx_begin = match(statement, '\s\+new\s\+[a-zA-Z0-9_. \t\r\n]\+')
-	  if idx_begin > -1
-	    let idx_end = matchend(statement, '\s\+new\s\+[a-zA-Z0-9_. \t\r\n]\+')
-	    if idx_end >= pos
-	      let b:dotexpr = substitute(strpart(statement, idx_begin, idx_end-idx_begin), '\s\+new\s\+\([a-zA-Z0-9_. \t\r\n\n]\+\)', '\1', '')
-	      let b:dotexpr = substitute(b:dotexpr, '[ \t\r\n]', '', 'g')
-	      let b:incomplete = 'new'
-	      " excluding 'new this()' or 'new super()'
-	      if b:dotexpr == 'this' || b:dotexpr == 'super'
-		let b:dotexpr = ''
-		let b:incomplete = ''
-		return -1
-	      endif
-	      return start - strlen(b:dotexpr)
-	    endif
-	  endif
-	endif
+      " normal method invocations
       else
-	if b:incomplete == 'this' || b:incomplete == 'super' 
-	  let b:dotexpr = b:incomplete
-	  let b:incomplete = 'new'
-	  return start - strlen(b:dotexpr)
-	else
-	  let b:dotexpr = 'this.'
+	let pos = match(statement, '\s*' . s:RE_IDENTIFIER . '$')
+	" case: "method(|)", "this(|)", "super(|)"
+	if pos == 0
+	  let statement = substitute(statement, '^\s*', '', '')
+	  " treat "this" or "super" as a type name.
+	  if statement == 'this' || statement == 'super' 
+	    let b:dotexpr = statement
+	    let b:incomplete = '+'
+	    return start - len(b:dotexpr)
+
+	  elseif !s:IsKeyword(statement)
+	    let b:dotexpr = 'this.'
+	    let b:incomplete = statement
+	    return start - strlen(b:incomplete)
+	  endif
+
+	" case: "expr.method(|)"
+	elseif statement[pos-1] == '.' && !s:IsKeyword(strpart(statement, pos))
+	  let b:dotexpr = s:ExtractCleanExpr(strpart(statement, 0, pos))
+	  let b:incomplete = strpart(statement, pos)
 	  return start - strlen(b:incomplete)
 	endif
-      end
-      let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
-      return start - strlen(b:incomplete)
-    endif
-
-    " String literal
-    if b:dotexpr =~  '"\s*\.\s*$'
-      let b:dotexpr = substitute(b:dotexpr, '\s*\.\s*$', '\.', '')
-      let b:context_type = s:CONTEXT_AFTER_DOT
-      return start - strlen(b:incomplete)
-    endif
-
-    let b:dotexpr = s:ExtractCleanExpr(b:dotexpr)
-
-    let end_char = statement[strlen(statement)-1]
-    if end_char == '.'
-      let b:context_type = s:CONTEXT_AFTER_DOT
-
-    " an incomplete word, identifier, or method
-    elseif end_char =~ '\w'
-      let b:context_type = s:CONTEXT_INCOMPLETE_WORD
-      let idx_dot = strridx(b:dotexpr, '.')
-      if idx_dot != -1
-	let b:incomplete = strpart(b:dotexpr, idx_dot+1)
-	let b:dotexpr = strpart(b:dotexpr, 0, idx_dot+1)
       endif
+    endif
 
-    else
-      let b:context_type = s:CONTEXT_OTHER
-      echo 'Cannot correctly parse ' . statement . ''
-    end
-
-    return start - strlen(b:incomplete)
+    return -1
   endif
 
 
@@ -224,12 +210,14 @@ function! javacomplete#Complete(findstart, base)
 
   let result = []
   if b:dotexpr !~ '^\s*$'
-    if b:context_type == s:CONTEXT_AFTER_DOT || b:context_type == s:CONTEXT_INCOMPLETE_WORD
+    if b:context_type == s:CONTEXT_AFTER_DOT
+      call s:KeepCursor('call s:GenerateImports()')
       let result = s:CompleteAfterDot()
-    elseif b:context_type == s:CONTEXT_IMPORT || b:context_type == s:CONTEXT_IMPORT_STATIC || b:context_type == s:CONTEXT_PACKAGE_DECL
-      let result = s:GetMembers(b:dotexpr)
+    elseif b:context_type == s:CONTEXT_IMPORT || b:context_type == s:CONTEXT_IMPORT_STATIC || b:context_type == s:CONTEXT_PACKAGE_DECL || b:context_type == s:CONTEXT_NEED_TYPE
+      let result = s:GetMembers(b:dotexpr[:-2])
     elseif b:context_type == s:CONTEXT_METHOD_PARAM
-      if b:incomplete == 'new'
+      call s:KeepCursor('call s:GenerateImports()')
+      if b:incomplete == '+'
 	let fqn = s:GetFQN(b:dotexpr)
 	if (fqn != '')
 	  let result = s:GetConstructorList(fqn, b:dotexpr)
@@ -243,9 +231,11 @@ function! javacomplete#Complete(findstart, base)
 
   if len(result) > 0
     " filter according to b:incomplete
-    if len(b:incomplete) > 0 && b:incomplete != 'new'
+    if len(b:incomplete) > 0 && b:incomplete != '+'
       let result = filter(copy(result), "type(v:val) == type('') ? v:val =~ '^" . b:incomplete . "' : v:val['word'] =~ '^" . b:incomplete . "'")
-      if exists('s:padding') && !empty(s:padding)
+    endif
+
+    if exists('s:padding') && !empty(s:padding)
 	for item in result
 	  if type(item) == type("")
 	    let item .= s:padding
@@ -253,7 +243,7 @@ function! javacomplete#Complete(findstart, base)
 	   let item.word .= s:padding
 	  endif
 	endfor
-      endif
+	unlet s:padding
     endif
 
     call s:Debug('finish completion' . reltimestr(reltime(s:et_whole)) . 's')
@@ -309,6 +299,7 @@ function! s:CompleteAfterDot()
   let isnew = expr =~ '^new\>'
   if isnew
     let typename = substitute(expr, '^new\s*\([a-zA-Z_$. \t\r\n]\+\)(.*$', '\1', '')
+    let expr = substitute(expr, '^new\s*\([a-zA-Z_$. \t\r\n]\+\)', 'obj', '')
   endif
 
   " prepend 'this.' if it is a local method. e.g.
@@ -376,7 +367,7 @@ function! s:CompleteAfterDot()
   "	   "getFoo().foo()"	== "this.getFoo().foo()"
   "	   "int.class.toString().|"
   "	   "list.toArray().|"
-  "	   "new ZipFile(path).|entries().|"
+  "	   "new java.util.zip.ZipFile(path).|entries().|"
   "	   "(new ZipFile(path)).|entries().|"
   "							  
   "	4) "System.in.|"	- A static field of a type (System)
@@ -508,7 +499,7 @@ function! s:GetStatement()
   let col_old = col('.')
 
   while 1
-    if search('[{;]', 'bW') == 0
+    if search('[{};]', 'bW') == 0
       let lnum = 1
       let col  = 1
     else
@@ -542,8 +533,13 @@ fu! s:MergeLines(lnum, col, lnum_old, col_old)
     let col = 1
   endif
   let str .= s:Prune(strpart(getline(a:lnum_old), col-1, a:col_old-col), col)
+  " generic in JAVA 5+
+  while match(str, s:RE_TYPE_ARGUMENTS) != -1
+    let str = substitute(str, '\(' . s:RE_TYPE_ARGUMENTS . '\)', '\=repeat(" ", len(submatch(1)))', 'g')
+  endwhile
   let str = substitute(str, '\s\+', ' ', '')
-  let str = substitute(str, '\.[ \t]\+', '.', 'g')
+  let str = substitute(str, '\([.()]\)[ \t]\+', '\1', 'g')
+  let str = substitute(str, '[ \t]\+\([.()]\)', '\1', 'g')
   return str
 endfu
 
@@ -579,6 +575,7 @@ endfu
 function! s:GenerateImports()
   let b:packages = ['java.lang.']
   let b:fqns = []
+  let b:staticimports = []
 
   if &ft == 'jsp'
     return s:GenerateImportsInJSP()
@@ -595,12 +592,15 @@ function! s:GenerateImports()
     end
 
     let stat = strpart(getline(lnum), col('.')-1)	" TODO: search semicolon or import keyword, excluding comment
-    let RE_IMPORT_DECL = '\<import\>\(\s\+static\>\)\?\s\+\(\(\([a-zA-Z_$][a-zA-Z0-9_$]*\)\(\s*\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\)*\)\(\s*\.\s*\*\)\?\);'
+    let RE_IMPORT_DECL = '\<import\>\(\s\+static\>\)\?\s\+\([a-zA-Z_$][a-zA-Z0-9_$]*\%(\s*\.\s*[a-zA-Z_$][a-zA-Z0-9_$]*\)*\%(\s*\.\s*\*\)\?\);'
     if stat =~ RE_IMPORT_DECL
-      let item = substitute(stat, RE_IMPORT_DECL . '.*$', '\2', '')
-      let item = substitute(item , '\s*\.\s*', '.', 'g')
+      let subs = split(substitute(stat, '^\s*' . RE_IMPORT_DECL . '.*$', '\1;\2', ''), ';', 1)
+      let item = substitute(subs[1] , '\s', '', 'g')
+      if subs[0] != ''
+	call add(b:staticimports, item)
+      endif
       if item =~ '\*$'
-	call add(b:packages, strpart(item, 0, strlen(item)-1))
+	call add(b:packages, item[:-2])
       elseif item =~ '[A-Za-z0-9_]$'
 	call add(b:fqns, item)
       endif
@@ -786,9 +786,7 @@ function! s:GetDeclaredClassName(var)
     let matchs += s:SearchNameInAST(type, var, java_parser#MakePos(line('.')-1, col('.')-1))
   endfor
   "call s:Info(var . ' ' . string(matchs) . ' line: ' . line('.') . ' col: ' . col('.'))
-  if empty(matchs)
-    return ''
-  else
+  if !empty(matchs)
     let tree = matchs[len(matchs)-1]
     if isArrayElement
       return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype.elementtype) : ''
@@ -796,6 +794,67 @@ function! s:GetDeclaredClassName(var)
       return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype) : ''
     endif
   endif
+
+  " TODO: get super class info and search for it
+  call javacomplete#parse()
+  let types = s:SearchTypeAt(b:ast, java_parser#MakePos(line('.')-1, col('.')-1))
+  let t = types[len(types)-1]
+  if !empty(t)
+    let ci = s:AddInheritedClassInfo({}, t)
+    if !empty(ci)
+      let idx = s:Index(ci.fields, var, 'n')
+      " FIXME: there are more than one members with the same simple name
+      if idx != -1
+	return ci.fields[idx].t
+      endif
+    endif
+  endif
+
+
+  " TODO: it's a imported static field
+  if !empty(b:staticimports)
+    let candidates = []		" type names of candidate
+    for item in b:staticimports
+      let typename = ''
+      if item[-1:] == '*'	" static import on demand
+	let typename = item[:-3]
+      elseif item =~ '\<' . var . '$'
+	let typename = item[:strridx(item, '.')]
+      endif
+      call add(candidates, typename)
+    endfor
+
+    " read type info which not in cache
+    let seplist = ''
+    for typename in candidates
+      if !has_key(s:cache, typename)
+	let seplist .= typename . ','
+      endif
+    endfor
+    if seplist != ''
+      let res = s:RunReflection('-E', seplist, 's:GetFQN in Batch')
+      if res =~ "^{'"
+	let dict = eval(res)
+	for key in keys(dict)
+	  let s:cache[key] = s:Sort(dict[key])
+	endfor
+      endif
+    endif
+
+    " search in all candidate types
+    for typename in candidates
+      " check typename is a type name 
+      let ti = get(s:cache, typename, 0)
+      if type(ti) == type({}) && ti.tag == 'CLASSDEF'
+	let idx = s:Index(ti.fields, var, 'n')
+	if idx != -1
+	  return ti.fields[idx].t
+	endif
+      endif
+    endfor
+  endif
+
+  return ''
   endif
 
 
@@ -985,6 +1044,7 @@ fu! javacomplete#Searchdecl()
   return hint
 endfu
 
+" If targetPos is -1, return all types, otherwise return the enclosing type.
 fu! s:SearchTypeAt(tree, targetPos)
   let matches = []
   if a:tree.tag == 'TOPLEVEL'
@@ -1286,6 +1346,10 @@ fu! s:IsBuiltinType(name)
   return a:name =~# '^\(boolean\|byte\|char\|int\|short\|long\|float\|double\)$'
 endfu
 
+fu! s:IsKeyword(name)
+  return a:name =~# '^\%(abstract\|assert\|break\|case\|catch\|const\|continue\|default\|do\|else\|enum\|extends\|final\|finally\|for\|goto\|if\|implements\|import\|instanceof\|interface\|native\|new\|package\|private\|protected\|public\|return\|static\|strictfp\|switch\|synchronized\|throw\|throws\|transient\|try\|volatile\|while\|true\|false\|null\|this\|super\|byte\|short\|char\|int\|long\|float\|double\|boolean\)$'
+endfu
+
 " options								{{{1
 " Methods to search declaration						{{{2
 "	1 - by builtin searchdecl()
@@ -1484,7 +1548,7 @@ endfu
 fu! s:Index(list, expr, key)
   let i = 0
   while i < len(a:list)
-    if get(a:list[i], key, '') == expr
+    if get(a:list[i], a:key, '') == a:expr
       return i
     endif
     let i += 1
@@ -1495,7 +1559,7 @@ endfu
 fu! s:Match(list, expr, key)
   let i = 0
   while i < len(a:list)
-    if get(a:list[i], key, '') =~ expr
+    if get(a:list[i], a:key, '') =~ a:expr
       return i
     endif
     let i += 1
@@ -1533,12 +1597,14 @@ endfunction
 " set string literal empty, remove comments, trim begining or ending spaces
 " test case: ' 	sb. /* block comment*/ append( "stringliteral" ) // comment '
 function! s:Prune(str, ...)
+  if a:str =~ '^\s*$' | return '' | endif
+
   let str = substitute(a:str, '"\(\\\(["\\''ntbrf]\)\|[^"]\)*"', '""', 'g')
   let str = substitute(str, '\/\/.*', '', 'g')
   let str = s:RemoveBlockComments(str)
   let str = substitute(str, '^\s*', '', '')
   if a:0 == 0
-    let str = substitute(str, '\s*$', '', '')
+    let str = substitute(str, '\s*$', ' ', '')
   endif
   return str
 endfunction
@@ -1771,16 +1837,18 @@ fu! s:DoGetClassInfo(class, ...)
     call javacomplete#parse()
     let matchs = s:SearchTypeAt(b:ast, java_parser#MakePos(line('.')-1, col('.')-1))
     let t = {}
-    let stat = s:GetStatement()
-    for m in matchs
-      if stat =~ m.name
-	let t = m
-	break
-      endif
-    endfor
-    if empty(t) && len(matchs) > 0
+    " FIXME:
+    "let stat = s:GetStatement()
+    "for m in matchs
+    "  if stat =~ m.name
+    "    let t = m
+    "    break
+    "  endif
+    "endfor
+    "echo t
+    "if empty(t) && len(matchs) > 0
       let t = matchs[len(matchs)-1]
-    endif
+    "endif
     if !empty(t)
       " What will be returned for super?
       " - the protected or public inherited fields and methods. No ctors.
@@ -2200,7 +2268,7 @@ fu! s:GetMembers(fqn, ...)
       endfor
     else	" elseif get(v, 'tag', '') == 'CLASSDEF'
       let isClass = 1
-      let list += s:DoGetMemberList(v, b:context_type == s:CONTEXT_IMPORT ? 3 : b:context_type == s:CONTEXT_IMPORT_STATIC ? 2 : 1)
+      let list += s:DoGetMemberList(v, b:context_type == s:CONTEXT_IMPORT || b:context_type == s:CONTEXT_NEED_TYPE ? 3 : b:context_type == s:CONTEXT_IMPORT_STATIC ? 2 : 1)
     endif
   endif
 

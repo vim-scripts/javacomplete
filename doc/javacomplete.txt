@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 23
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Aug 28
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -290,6 +290,14 @@ The embedded parser works a bit slower than expected.
 
 6.1 javacomplete				*javacomplete-history*
 
+    2007-08-28
+    -	Fixed case "new java.util.zip.ZipFile().|"
+    -	Improved process of type arguments and method parameters.
+    -	Reorganize codes in javacomplete#Complete()
+    -	Added CONTEXT_NEED_TYPE, removed CONTEXT_INCOMPLETE_WORD
+
+    2007-08-24	Add Context types for type declaration: CONTEXT_NEED_TYPE
+
 v0.76.6
     2007-08-23	Improved GetStatement() and related. Bug fixed.
 
@@ -376,6 +384,9 @@ v0.50 2007-01-21	Use java and Reflection.class directly.
 
 
 6.2 Parser					*java-parser-history*
+
+    2007-08-27
+    -	Minor changes
 
 v0.65
     2007-08-23

@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-23
-" Version:	0.65
+" Last Changed: 2007-08-28
+" Version:	0.66
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.65'
+let g:loaded_javaparser = 'v0.66'
 
 
 " Constants used by scanner and parser					{{{1
@@ -18,7 +18,7 @@ let s:EOI = ''
 
 let s:keywords = {'+': 'PLUS', '-': 'SUB', '!': 'BANG', '%': 'PERCENT', '^': 'CARET', '&': 'AMP', '*': 'STAR', '|': 'BAR', '~': 'TILDE', '/': 'SLASH', '>': 'GT', '<': 'LT', '?': 'QUES', ':': 'COLON', '=': 'EQ', '++': 'PLUSPLUS', '--': 'SUBSUB', '==': 'EQEQ', '<=': 'LTEQ', '>=': 'GTEQ', '!=': 'BANGEQ', '<<': 'LTLT', '>>': 'GTGT', '>>>': 'GTGTGT', '+=': 'PLUSEQ', '-=': 'SUBEQ', '*=': 'STAREQ', '/=': 'SLASHEQ', '&=': 'AMPEQ', '|=': 'BAREQ', '^=': 'CARETEQ', '%=': 'PERCENTEQ', '<<=': 'LTLTEQ', '>>=': 'GTGTEQ', '>>>=': 'GTGTGTEQ', '||': 'BARBAR', '&&': 'AMPAMP', 'abstract': 'ABSTRACT', 'assert': 'ASSERT', 'boolean': 'BOOLEAN', 'break': 'BREAK', 'byte': 'BYTE', 'case': 'CASE', 'catch': 'CATCH', 'char': 'CHAR', 'class': 'CLASS', 'const': 'CONST', 'continue': 'CONTINUE', 'default': 'DEFAULT', 'do': 'DO', 'double': 'DOUBLE', 'else': 'ELSE', 'extends': 'EXTENDS', 'final': 'FINAL', 'finally': 'FINALLY', 'float': 'FLOAT', 'for': 'FOR', 'goto': 'GOTO', 'if': 'IF', 'implements': 'IMPLEMENTS', 'import': 'IMPORT', 'instanceof': 'INSTANCEOF', 'int': 'INT', 'interface': 'INTERFACE', 'long': 'LONG', 'native': 'NATIVE', 'new': 'NEW', 'package': 'PACKAGE', 'private': 'PRIVATE', 'protected': 'PROTECTED', 'public': 'PUBLIC', 'return': 'RETURN', 'short': 'SHORT', 'static': 'STATIC', 'strictfp': 'STRICTFP', 'super': 'SUPER', 'switch': 'SWITCH', 'synchronized': 'SYNCHRONIZED', 'this': 'THIS', 'throw': 'THROW', 'throws': 'THROWS', 'transient': 'TRANSIENT', 'try': 'TRY', 'void': 'VOID', 'volatile': 'VOLATILE', 'while': 'WHILE', 'true': 'TRUE', 'false': 'FALSE', 'null': 'NULL', '(': 'LPAREN', ')': 'RPAREN', '{': 'LBRACE', '}': 'RBRACE', '[': 'LBRACKET', ']': 'RBRACKET', ';': 'SEMI', ',': 'COMMA', '.': 'DOT', 'enum': 'ENUM', '...': 'ELLIPSIS', '@': 'MONKEYS_AT'}
 
-let s:Flags = {'PUBLIC': 0x1, 'PRIVATE': 0x2, 'PROTECTED': 0x4, 'STATIC': 0x8, 'FINAL': 0x10, 'SYNCHRONIZED': 0x20, 'VOLATILE': 0x30, 'TRANSIENT': 0x80, 'NATIVE': 0x100, 'INTERFACE': 0x200, 'ABSTRACT': 0x400, 'STRICTFP': 0x800, 'SYNTHETIC': 0x1000, 'ANNOTATION': 0x2000, 'ENUM': 	0x4000, 'StandardFlags':0x0fff, 'ACC_SUPER': 0x20, 'ACC_BRIDGE': 0x40, 'ACC_VARARGS': 0x80, 'DEPRECATED': 0x20000, 'HASINIT': 0x40000, 'BLOCK': 0x100000, 'IPROXY': 0x200000, 'NOOUTERTHIS': 0x400000, 'EXISTS': 0x800000, 'COMPOUND': 0x1000000, 'CLASS_SEEN': 0x2000000, 'SOURCE_SEEN': 0x4000000, 'LOCKED': 0x8000000, 'UNATTRIBUTED': 0x10000000, 'ANONCONSTR': 0x20000000, 'ACYCLIC': 0x40000000, 'BRIDGE': 1.repeat('0', 31), 'PARAMETER': 1.repeat('0', 33), 'VARARGS': 1.repeat('0', 34), 'ACYCLIC_ANN': 1.repeat('0', 35), 'GENERATEDCONSTR': 1.repeat('0', 36), 'HYPOTHETICAL': 1.repeat('0', 37), 'PROPRIETARY': 1.repeat('0', 38)}
+let s:Flags = {'PUBLIC': 0x1, 'PRIVATE': 0x2, 'PROTECTED': 0x4, 'STATIC': 0x8, 'FINAL': 0x10, 'SYNCHRONIZED': 0x20, 'VOLATILE': 0x40, 'TRANSIENT': 0x80, 'NATIVE': 0x100, 'INTERFACE': 0x200, 'ABSTRACT': 0x400, 'STRICTFP': 0x800, 'SYNTHETIC': 0x1000, 'ANNOTATION': 0x2000, 'ENUM': 	0x4000, 'StandardFlags':0x0fff, 'ACC_SUPER': 0x20, 'ACC_BRIDGE': 0x40, 'ACC_VARARGS': 0x80, 'DEPRECATED': 0x20000, 'HASINIT': 0x40000, 'BLOCK': 0x100000, 'IPROXY': 0x200000, 'NOOUTERTHIS': 0x400000, 'EXISTS': 0x800000, 'COMPOUND': 0x1000000, 'CLASS_SEEN': 0x2000000, 'SOURCE_SEEN': 0x4000000, 'LOCKED': 0x8000000, 'UNATTRIBUTED': 0x10000000, 'ANONCONSTR': 0x20000000, 'ACYCLIC': 0x40000000, 'BRIDGE': 1.repeat('0', 31), 'PARAMETER': 1.repeat('0', 33), 'VARARGS': 1.repeat('0', 34), 'ACYCLIC_ANN': 1.repeat('0', 35), 'GENERATEDCONSTR': 1.repeat('0', 36), 'HYPOTHETICAL': 1.repeat('0', 37), 'PROPRIETARY': 1.repeat('0', 38)}
 
 let s:RE_ANYTHING_AND_NEWLINE	= '\(\(.\|\n\)*\)'
 let s:RE_LINE_COMMENT		= '//.*$'
@@ -156,7 +156,7 @@ fu! java_parser#block()
 endfu
 
 fu! java_parser#statement()
-  return s:statement()
+  return s:blockStatements()
 endfu
 
 fu! java_parser#expression()
@@ -1263,11 +1263,8 @@ endfu
 
 fu! s:ReportSyntaxError(pos, key, ...)
   if a:pos > b:errPos || a:pos == -1
-    if b:token == 'EOF'
-      call s:Log(4, a:pos, '[syntax error]' . s:Pos2Str(a:pos) . ': premature.eof')
-    else
-      call s:Log(4, a:pos, '[syntax error]' . s:Pos2Str(a:pos) . ': ' . a:key)
-    endif
+    let key = a:key . (b:token == 'EOF' ? ' and premature.eof' : '')
+    call s:Log(4, a:pos, '[syntax error]' . s:Pos2Str(a:pos) . ': ' . key)
   endif
   let b:errPos = a:pos
 endfu
@@ -1827,24 +1824,22 @@ fu! s:term3()
 	break
       endif
     endwhile
-    if typeArgs != []
-      return s:illegal()
-    endif
+    if typeArgs != [] | call s:illegal() | endif
     let t = s:typeArgumentsOpt2(t)
 
   elseif b:token =~# '^\(BYTE\|SHORT\|CHAR\|INT\|LONG\|FLOAT\|DOUBLE\|BOOLEAN\)$'
-    if typeArgs == []
-      let t = s:bracketsSuffix(s:bracketsOpt(s:basicType()))
-    endif
+    if typeArgs != [] | call s:illegal() | endif
+    let t = s:bracketsSuffix(s:bracketsOpt(s:basicType()))
 
   elseif b:token == 'VOID'
-    if typeArgs == [] && s:modeAndEXPR()
+    if typeArgs != [] | call s:illegal() | endif
+    if s:modeAndEXPR()
       call s:nextToken()
       if b:token == 'DOT'
 	let ti = {'tag': 'TYPEIDENT', 'pos': pos, 'typetag': 'void'}	" FIXME
 	let t = s:bracketsSuffix(ti)
       else
-	return s:illegal()
+	return s:illegal(pos)
       endif
     else
       return s:illegal()
@@ -2265,7 +2260,7 @@ fu! s:blockStatements()
       return stats
     elseif b:token =~# '^\(LBRACE\|IF\|FOR\|WHILE\|DO\|TRY\|SWITCH\|SYNCHRONIZED\|RETURN\|THROW\|BREAK\|CONTINUE\|SEMI\|ELSE\|FINALLY\|CATCH\)$'
       call add(stats, s:statement())
-    elseif b:token =~# '^\(MONKEYS_AT\|FINAL\|ENUM\)'
+    elseif b:token =~# '^\(MONKEYS_AT\|FINAL\)'
       let dc = b:docComment
       let mods = s:modifiersOpt()
       if b:token =~# '^\(INTERFACE\|CLASS\|ENUM\)$'
@@ -2275,17 +2270,13 @@ fu! s:blockStatements()
 	let stats = stats + s:variableDeclarators(mods, t, [])
 	call s:accept('SEMI')
       endif
-    elseif b:token =~# '^\(ABSTRACT\|STRICTFP\)$'
-      call add(stats, s:classOrInterfaceOrEnumDeclaration(s:modifiersOpt(), b:docComment))
-    elseif b:token =~# '^\(CLASS\|INTERFACE\)$'
-      call add(stats, s:classOrInterfaceOrEnumDeclaration(s:modifiersOpt(), b:docComment))
-    elseif b:token =~# '^\(ENUM\|ASSERT\)$'
+    elseif b:token =~# '^\(ABSTRACT\|STRICTFP\|CLASS\|INTERFACE\|ENUM\)$'
       if b:token == 'ENUM'
 	call s:Log(4, b:pos, 'local.enum')
-	call add(stats, s:classOrInterfaceOrEnumDeclaration(s:modifiersOpt(), b:docComment))
-      else
-	call add(stats, s:statement())
       endif
+      call add(stats, s:classOrInterfaceOrEnumDeclaration(s:modifiersOpt(), b:docComment))
+    elseif b:token == 'ASSERT'
+      call add(stats, s:statement())
     else
       let name = b:name
       let t = s:term(s:EXPR_OR_TYPE)
@@ -2295,7 +2286,7 @@ fu! s:blockStatements()
 	call add(stats, {'tag': 'LABELLED', 'pos': b:pos, 'label': name, 'body': stat})
       elseif s:BitAnd(b:lastmode, s:TYPE) && b:token =~# '^\(IDENTIFIER\|ASSERT\|ENUM\)$'
 	let pos = b:pos
-	let mods = {'tag': 'MODIFIERS', 'pos': -1, 'flags': 0}
+	let mods = {}		" {'tag': 'MODIFIERS', 'pos': -1, 'flags': 0}
 	let stats = stats + s:variableDeclarators(mods, t, [])
 	call s:accept('SEMI')
       else
@@ -2363,7 +2354,7 @@ fu! s:statement()
       return {'tag': 'FOREACHLOOP', 'pos': pos, 'endpos': b:pos, 'var': var, 'expr': expr, 'body': body}
     else
       call s:accept('SEMI')
-      let cond = b:token == 'SEMI' ? [] : s:expression()
+      let cond = b:token == 'SEMI' ? {} : s:expression()
       call s:accept('SEMI')
       let steps = b:token == 'RPAREN' ? [] : s:forUpdate()
       call s:accept('RPAREN')
@@ -2420,7 +2411,7 @@ fu! s:statement()
     
   elseif b:token == 'RETURN'
     call s:nextToken()
-    let result = b:token == 'SEMI' ? [] : s:expression()
+    let result = b:token == 'SEMI' ? {} : s:expression()
     call s:accept('SEMI')
     return {'tag': 'RETURN', 'pos': pos, 'endpos': b:pos, 'expr': result}
 
@@ -2430,17 +2421,12 @@ fu! s:statement()
     call s:accept('SEMI')
     return {'tag': 'THROW', 'pos': pos, 'endpos': b:pos, 'expr': exc}
 
-  elseif b:token == 'BREAK'
+  elseif b:token == 'BREAK' || b:token == 'CONTINUE'
+    let token = b:token
     call s:nextToken()
     let label = b:token =~# '^\(IDENTIFIER\|ASSERT\|ENUM\)$' ? s:ident() : ''
     call s:accept('SEMI')
-    return {'tag': 'BREAK', 'pos': pos, 'endpos': b:pos, 'label': label}
-
-  elseif b:token == 'CONTINUE'
-    call s:nextToken()
-    let label = b:token =~# '^\(IDENTIFIER\|ASSERT\|ENUM\)$' ? s:ident() : ''
-    call s:accept('SEMI')
-    return {'tag': 'CONTINUE', 'pos': pos, 'endpos': b:pos, 'label': label}
+    return {'tag': token, 'pos': pos, 'endpos': b:pos, 'label': label}
 
   elseif b:token == 'SEMI'
     call s:nextToken()
@@ -2499,17 +2485,13 @@ fu! s:switchBlockStatementGroups()
   let cases = []
   while 1
     let pos = b:pos
-    if b:token == 'CASE'
+    if b:token == 'CASE' || b:token == 'DEFAULT'
+      let token = b:token
       call s:nextToken()
-      let pat = s:expression()
+      let pat = token == 'CASE' ? s:expression() : {}
       call s:accept('COLON')
       let stats = s:blockStatements()
       call add(cases, {'tag': 'CASE', 'pos': pos, 'pat': pat, 'stats': stats})
-    elseif b:token == 'DEFAULT'
-      call s:nextToken()
-      call s:accept('COLON')
-      let stats = s:blockStatements()
-      call add(cases, {'tag': 'CASE', 'pos': pos, 'pat': {}, 'stats': stats})
     elseif b:token == 'RBRACE' || b:token == 'EOF' 
       return cases
     else
@@ -2537,7 +2519,7 @@ fu! s:forInit()
   let stats = []
   let pos = b:pos
   if b:token == 'FINAL' || b:token == 'MONKEYS_AT'
-    return s:variableDeclarators(Java_optFinal(0), s:type(), stats)
+    return s:variableDeclarators(s:optFinal(0), s:type(), stats)
   else
     let t = s:term(s:EXPR_OR_TYPE)
     if s:BitAnd(b:lastmode, s:TYPE) && b:token =~# '^\(IDENTIFIER\|ASSERT\|ENUM\)$'
@@ -2710,7 +2692,7 @@ fu! s:compilationUnit()
     let mods = s:modifiersOpt()
   endif
 
-  if b:name == 'package'
+  if b:token == 'PACKAGE'
     if mods != {}
       " checkNoMods(mods.flags)
       let unit.packageAnnotations = mods.annotations
@@ -3326,7 +3308,7 @@ endfu
 fu! s:variableDeclaratorRest(pos, mods, type, name, reqInit, dc)
   let vardef = s:VarDef(a:pos, a:mods, a:name, s:bracketsOpt(a:type))
   let vardef.n = vardef.name
-  let vardef.m = s:Number2Bits(a:mods.flags)
+  let vardef.m = a:mods == {} ? '0' : s:Number2Bits(a:mods.flags)
   let vardef.t = java_parser#type2Str(vardef.vartype)
 
   if b:token == 'EQ'
@@ -3450,7 +3432,7 @@ fu! s:checkExprStat(t)
     return a:t
   else
     call s:SyntaxError('not.stmt')
-    return {'tag': 'ERRONEOUS', 'pos': b:pos}
+    return {'tag': 'ERRONEOUS', 'pos': b:pos, 'errs': [a:t]}
   endif
 endfu
 
