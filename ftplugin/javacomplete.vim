@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.76.7
+" Version:	0.76.8
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-08-28
+" Last Change:	2007-08-30
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -61,6 +61,9 @@ let s:RE_TYPE_ARGUMENTS	= '<' . s:RE_TYPE_ARGUMENT . '\%(\s*,\s*' . s:RE_TYPE_AR
 let s:RE_TYPE_WITH_ARGUMENTS_I	= s:RE_IDENTIFIER . '\s*' . s:RE_TYPE_ARGUMENTS
 let s:RE_TYPE_WITH_ARGUMENTS	= s:RE_TYPE_WITH_ARGUMENTS_I . '\%(\s*' . s:RE_TYPE_WITH_ARGUMENTS_I . '\)*'
 
+let s:RE_TYPE_MODS	= '\%(public\|protected\|private\|abstract\|static\|final\|strictfp\)'
+let s:RE_TYPE_DECL	= '\C\(' .s:RE_TYPE_MODS. '\s\+\)*\(class\|interface\|enum\)\s\+\([a-zA-Z_$][a-zA-Z0-9_$]*\)\s*'
+
 
 " local variables						{{{1
 let b:context_type = s:CONTEXT_OTHER
@@ -73,7 +76,7 @@ let b:fqns = []
 let b:ast = {}				" Abstract Syntax Tree of the current buf
 
 " script variables						{{{1
-let s:cache = {}	" FQN -> member list, e.g. {'java.lang.StringBuffer': classinfo, 'java.util': packageinfo, }
+let s:cache = {}	" FQN -> member list, e.g. {'java.lang.StringBuffer': classinfo, 'java.util': packageinfo, '/dir/TopLevelClass.java': compilationUnit}
 
 
 " This function is used for the 'omnifunc' option.		{{{1
@@ -87,9 +90,9 @@ function! javacomplete#Complete(findstart, base)
     let b:dotexpr = ''
     let b:incomplete = ''
     let b:context_type = s:CONTEXT_OTHER
-    if !empty(b:ast) && changenr() > 0
+    "if exists('b:ast') && !empty(b:ast) && changenr() > 0
       let b:ast = {}
-    endif
+    "endif
 
     let statement = s:GetStatement()
     call s:WatchVariant('statement: "' . statement . '"')
@@ -124,7 +127,7 @@ function! javacomplete#Complete(findstart, base)
 
       else
 	" type declaration		NOTE: not supported generic yet.
-	let idx_type = matchend(statement, '^\s*\(\%(public\|protected\|private\|abstract\|static\|final\|strictfp\)\s\+\)*\(class\|interface\|enum\)\s\+[a-zA-Z_$][a-zA-Z0-9_$]*\s*')
+	let idx_type = matchend(statement, '^\s*' . s:RE_TYPE_DECL)
 	if idx_type != -1
 	  let b:dotexpr = strpart(statement, idx_type)
 	  " return if not after extends or implements
@@ -499,7 +502,7 @@ function! s:GetStatement()
   let col_old = col('.')
 
   while 1
-    if search('[{};]', 'bW') == 0
+    if search('[{};]\|<%\|<%!', 'bW') == 0
       let lnum = 1
       let col  = 1
     else
@@ -780,12 +783,9 @@ function! s:GetDeclaredClassName(var)
   " TODO:
   " use java_parser.vim
   if javacomplete#GetSearchdeclMethod() == 4
-  call javacomplete#parse()
-  let matchs = []
-  for type in b:ast.types
-    let matchs += s:SearchNameInAST(type, var, java_parser#MakePos(line('.')-1, col('.')-1))
-  endfor
-  "call s:Info(var . ' ' . string(matchs) . ' line: ' . line('.') . ' col: ' . col('.'))
+  let unit = javacomplete#parse()
+  let targetPos = java_parser#MakePos(line('.')-1, col('.')-1)
+  let matchs = s:SearchNameInAST(unit, var, targetPos)
   if !empty(matchs)
     let tree = matchs[len(matchs)-1]
     if isArrayElement
@@ -793,65 +793,6 @@ function! s:GetDeclaredClassName(var)
     else
       return tree.tag == 'VARDEF' ? java_parser#type2Str(tree.vartype) : ''
     endif
-  endif
-
-  " TODO: get super class info and search for it
-  call javacomplete#parse()
-  let types = s:SearchTypeAt(b:ast, java_parser#MakePos(line('.')-1, col('.')-1))
-  let t = types[len(types)-1]
-  if !empty(t)
-    let ci = s:AddInheritedClassInfo({}, t)
-    if !empty(ci)
-      let idx = s:Index(ci.fields, var, 'n')
-      " FIXME: there are more than one members with the same simple name
-      if idx != -1
-	return ci.fields[idx].t
-      endif
-    endif
-  endif
-
-
-  " TODO: it's a imported static field
-  if !empty(b:staticimports)
-    let candidates = []		" type names of candidate
-    for item in b:staticimports
-      let typename = ''
-      if item[-1:] == '*'	" static import on demand
-	let typename = item[:-3]
-      elseif item =~ '\<' . var . '$'
-	let typename = item[:strridx(item, '.')]
-      endif
-      call add(candidates, typename)
-    endfor
-
-    " read type info which not in cache
-    let seplist = ''
-    for typename in candidates
-      if !has_key(s:cache, typename)
-	let seplist .= typename . ','
-      endif
-    endfor
-    if seplist != ''
-      let res = s:RunReflection('-E', seplist, 's:GetFQN in Batch')
-      if res =~ "^{'"
-	let dict = eval(res)
-	for key in keys(dict)
-	  let s:cache[key] = s:Sort(dict[key])
-	endfor
-      endif
-    endif
-
-    " search in all candidate types
-    for typename in candidates
-      " check typename is a type name 
-      let ti = get(s:cache, typename, 0)
-      if type(ti) == type({}) && ti.tag == 'CLASSDEF'
-	let idx = s:Index(ti.fields, var, 'n')
-	if idx != -1
-	  return ti.fields[idx].t
-	endif
-      endif
-    endfor
   endif
 
   return ''
@@ -954,14 +895,91 @@ function! s:GetNextSubexprType(fqn, expr)
 endfunction
 
 " using java_parser.vim					{{{1
-fu! javacomplete#parse()
-  if empty(b:ast)	" changenr() == 0 && 
+" javacomplete#parse()					{{{2
+fu! javacomplete#parse(...)
+  let filename = a:0 == 0 ? '%' : a:1
+
+  if filename == '%'
+    if exists('b:ast') && !empty(b:ast)
+      return b:ast
+    endif
     call java_parser#InitParser(getline('^', '$'))
     call java_parser#SetLogLevel(5)
     let b:ast = java_parser#compilationUnit()
+    return b:ast
+  else
+    if has_key(s:cache, filename) "TODO: && NotModified
+      return get(s:cache, filename, {})
+    endif
+    call java_parser#InitParser(readfile(filename))
+    call java_parser#SetLogLevel(5)
+    let unit = java_parser#compilationUnit()
+    let s:cache[filename] = unit
+    return unit
   endif
 endfu
 
+" TreeVisitor						{{{2
+fu! s:visitTree(tree, param) dict
+  if type(a:tree) == type({})
+    exe get(self, get(a:tree, 'tag', ''), '')
+  elseif type(a:tree) == type([])
+    for tree in a:tree
+      call self.visit(tree, a:param)
+    endfor
+  endif
+endfu
+
+let s:TreeVisitor = {'visit': function('s:visitTree'),
+	\ 'TOPLEVEL'	: 'call self.visit(a:tree.types, a:param)',
+	\ 'BLOCK'	: 'let stats = a:tree.stats | if stats == [] | call java_parser#GotoPosition(a:tree.pos) | let stats = java_parser#block().stats | endif | call self.visit(stats, a:param)',
+	\ 'DOLOOP'	: 'call self.visit(a:tree.body, a:param) | call self.visit(a:tree.cond, a:param)',
+	\ 'WHILELOOP'	: 'call self.visit(a:tree.cond, a:param) | call self.visit(a:tree.body, a:param)',
+	\ 'FORLOOP'	: 'call self.visit(a:tree.init, a:param) | call self.visit(a:tree.cond, a:param) | call self.visit(a:tree.step, a:param) | call self.visit(a:tree.body, a:param)',
+	\ 'FOREACHLOOP'	: 'call self.visit(a:tree.var, a:param)  | call self.visit(a:tree.expr, a:param) | call self.visit(a:tree.body, a:param)',
+	\ 'LABELLED'	: 'call self.visit(a:tree.body, a:param)',
+	\ 'SWITCH'	: 'call self.visit(a:tree.selector, a:param) | call self.visit(a:tree.cases, a:param)',
+	\ 'CASE'	: 'call self.visit(a:tree.pat,  a:param) | call self.visit(a:tree.stats, a:param)',
+	\ 'SYNCHRONIZED': 'call self.visit(a:tree.lock, a:param) | call self.visit(a:tree.body, a:param)',
+	\ 'TRY'		: 'call self.visit(a:tree.body, a:param) | call self.visit(a:tree.catchers, a:param) | call self.visit(a:tree.finalizer, a:param) ',
+	\ 'CATCH'	: 'call self.visit(a:tree.param,a:param) | call self.visit(a:tree.body, a:param)',
+	\ 'CONDEXPR'	: 'call self.visit(a:tree.cond, a:param) | call self.visit(a:tree.truepart, a:param) | call self.visit(a:tree.falsepart, a:param)',
+	\ 'IF'		: 'call self.visit(a:tree.cond, a:param) | call self.visit(a:tree.thenpart, a:param) | if has_key(a:tree, "elsepart") | call self.visit(a:tree.elsepart, a:param) | endif',
+	\ 'EXEC'	: 'call self.visit(a:tree.expr, a:param)',
+	\ 'APPLY'	: 'call self.visit(a:tree.meth, a:param) | call self.visit(a:tree.args, a:param)',
+	\ 'NEWCLASS'	: 'call self.visit(a:tree.def, a:param)'
+	\}
+
+let s:TV_CMP_POS = 'a:tree.pos <= a:param.pos && a:param.pos <= get(a:tree, "endpos", -1)'
+let s:TV_CMP_POS_BODY = 'a:tree.body.pos <= a:param.pos && a:param.pos <= get(a:tree.body, "endpos", -1)'
+
+" Return a stack of enclosing types (including local or anonymous classes).
+" Given the optional argument, return all (toplevel or static member) types besides enclosing types.
+fu! s:SearchTypeAt(tree, targetPos, ...)
+  let s:TreeVisitor.CLASSDEF	= 'if a:param.allNonLocal || ' . s:TV_CMP_POS . ' | call add(a:param.result, a:tree) | call self.visit(a:tree.defs, a:param) | endif'
+  let s:TreeVisitor.METHODDEF	= 'if ' . s:TV_CMP_POS_BODY . ' | call self.visit(a:tree.body, a:param) | endif'
+  let s:TreeVisitor.VARDEF	= 'if has_key(a:tree, "init") && !a:param.allNonLocal && ' . s:TV_CMP_POS . ' | call self.visit(a:tree.init, a:param) | endif'
+
+  let result = []
+  call s:TreeVisitor.visit(a:tree, {'result': result, 'pos': a:targetPos, 'allNonLocal': a:0 == 0 ? 0 : 1})
+  return result
+endfu
+
+" return	a stack of matching name
+fu! s:SearchNameInAST(tree, name, targetPos)
+  let cmd = 'if a:tree.name == a:param.name | call add(a:param.result, a:tree) | endif'
+  let s:TreeVisitor.CLASSDEF	= 'if ' . s:TV_CMP_POS . ' | ' . cmd . ' | call self.visit(a:tree.defs, a:param) | endif'
+  let s:TreeVisitor.METHODDEF	= cmd . ' | if ' . s:TV_CMP_POS_BODY . ' | call self.visit(a:tree.params, a:param) | call self.visit(a:tree.body, a:param) | endif'
+  let s:TreeVisitor.VARDEF	= cmd . ' | if has_key(a:tree, "init") && ' . s:TV_CMP_POS . ' | call self.visit(a:tree.init, a:param) | endif'
+
+  let result = []
+  call s:TreeVisitor.visit(a:tree, {'result': result, 'pos': a:targetPos, 'name': a:name})
+  "call s:Info(a:name . ' ' . string(result) . ' line: ' . line('.') . ' col: ' . col('.')) . ' ' . a:targetPos
+  return result
+endfu
+
+
+" javacomplete#Searchdecl				{{{2
 " TODO:
 fu! javacomplete#Searchdecl()
   let var  = expand('<cword>')
@@ -975,8 +993,7 @@ fu! javacomplete#Searchdecl()
       return ''
     endif
 
-    call javacomplete#parse()
-    let matchs = s:SearchTypeAt(b:ast, java_parser#MakePos(line, col))
+    let matchs = s:SearchTypeAt(javacomplete#parse(), java_parser#MakePos(line, col))
 
     let stat = s:GetStatement()
     for t in matchs
@@ -1015,14 +1032,7 @@ fu! javacomplete#Searchdecl()
 
 
   " Search in this buffer
-  if changenr() == 0
-    call javacomplete#parse()
-  endif
-  let matchs = []
-  let targetPos = java_parser#MakePos(line, col)
-  for type in b:ast.types
-    let matchs += s:SearchNameInAST(type, var, targetPos)
-  endfor
+  let matchs = s:SearchNameInAST(javacomplete#parse(), var, java_parser#MakePos(line, col))
 
 
   let hint = var . ' '
@@ -1042,150 +1052,6 @@ fu! javacomplete#Searchdecl()
 
   endif
   return hint
-endfu
-
-" If targetPos is -1, return all types, otherwise return the enclosing type.
-fu! s:SearchTypeAt(tree, targetPos)
-  let matches = []
-  if a:tree.tag == 'TOPLEVEL'
-    for type in a:tree.types
-      let matches += s:SearchTypeAt(type, a:targetPos)
-    endfor
-  elseif a:tree.tag == 'CLASSDEF' && (a:targetPos == -1 || a:tree.pos <= a:targetPos && a:targetPos <= get(a:tree, 'endpos', -1))
-    call add(matches, a:tree)
-    for def in a:tree.defs
-      if def.tag == 'CLASSDEF'
-	let matches += s:SearchTypeAt(def, a:targetPos)
-      endif
-    endfor
-  endif
-  return matches
-endfu
-
-" precondition: name must exists in unit.
-" return	a stack of matched
-" 搜索限于statement子类
-fu! s:SearchNameInAST(tree, name, targetPos)
-  if type(a:tree) == type([])
-    return []
-  endif
-  if !java_parser#IsStatement(a:tree) "&& !(a:tree.pos <= a:targetPos && a:targetPos <= a:tree.endpos)
-    return []
-  endif
-
-  let matchs = []
-  if type(a:tree) == type([])
-    for i in a:tree
-      let matchs += s:SearchNameInAST(i, a:name, a:targetPos)
-    endfor
-    return matchs
-  endif
-
-
-  if a:tree.tag == 'CLASSDEF'
-    let type = a:tree
-    " first, a class?
-    if type.name == a:name
-      call add(matchs, type)
-    endif
-
-    for def in type.defs
-      " a field?
-      if def.tag == 'VARDEF' && def.name == a:name
-	call add(matchs, def)
-
-      " a method?
-      elseif def.tag == 'METHODDEF'
-	if def.name == a:name
-	  call add(matchs, def)
-	endif
-
-	" then, a local variable or a parameter in the body ?
-	" cursor must be in this block
-	if has_key(def, 'body') && def.body.pos <= a:targetPos && a:targetPos <= def.body.endpos
-	  " a method parameter?
-	  for param in def.params
-	    if param.name == a:name
-	      call add(matchs, param)
-	    endif
-	  endfor
-
-	  " It is importan that just move the scanning position, avoid changing the buf!!!
-	  call java_parser#GotoPosition(def.body.pos)
-	  let block = java_parser#block()
-	  let matchs += s:SearchNameInAST(block, a:name, a:targetPos)
-	endif
-
-      " in a static block or a nested class?
-      else
-	let matchs += s:SearchNameInAST(def, a:name, a:targetPos)
-      endif
-    endfor
-    return matchs
-
-  elseif a:tree.tag == 'VARDEF'
-    if a:tree.name == a:name
-      return [a:tree]
-    endif
-
-  elseif a:tree.tag == 'BLOCK'
-    let stats = a:tree.stats
-    if stats == []
-      call java_parser#GotoPosition(a:tree.pos)
-      let stats = java_parser#block().stats
-    endif
-    for stat in stats
-      if stat.tag == 'VARDEF'
-	let matchs += s:SearchNameInAST(stat, a:name, a:targetPos)
-
-      elseif stat.tag == 'BLOCK'
-	let matchs += s:SearchNameInAST(stat, a:name, a:targetPos)
-
-      elseif stat.tag == 'IF'
-	let matchs += s:SearchNameInAST(stat.cond, a:name, a:targetPos)
-	let matchs += s:SearchNameInAST(stat.thenpart, a:name, a:targetPos)
-	if has_key(stat, 'elsepart')
-	  let matchs += s:SearchNameInAST(stat.elsepart, a:name, a:targetPos)
-	endif
-	
-      elseif stat.tag == 'FORLOOP'
-	for item in stat.init
-	  let matchs += s:SearchNameInAST(item, a:name, a:targetPos)
-	endfor
-	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
-
-      elseif stat.tag == 'WHILELOOP'
-	let matchs += s:SearchNameInAST(stat.cond, a:name, a:targetPos)
-	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
-
-      elseif stat.tag == 'DOLOOP'
-	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
-
-      elseif stat.tag == 'TRY'
-	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
-	if has_key(stat, 'catchers')
-	  for catch in stat.catchers
-	    let matchs += s:SearchNameInAST(catch.param, a:name, a:targetPos)
-	    let matchs += s:SearchNameInAST(catch.body, a:name, a:targetPos)
-	  endfor
-	endif
-	if has_key(stat, 'finalizer')
-	  let matchs += s:SearchNameInAST(stat.finalizer, a:name, a:targetPos)
-	endif
-
-      elseif stat.tag == 'SWITCH'
-	for case in stat.cases
-	  let matchs += s:SearchNameInAST(case, a:name, a:targetPos)
-	endfor
-
-      elseif stat.tag == 'SYNCHRONIZED'
-	let matchs += s:SearchNameInAST(stat.body, a:name, a:targetPos)
-
-      endif
-    endfor
-  endif
-
-  return matchs
 endfu
 
 
@@ -1239,8 +1105,7 @@ function! s:GetFQN(name)
 
   call s:Debug('GetFQN: to check case 3: a class in this buffer, or same package, or sourcepath?')
   if &ft != 'jsp'
-    call javacomplete#parse()
-    for t in s:SearchTypeAt(b:ast, -1)
+    for t in s:SearchTypeAt(javacomplete#parse(), java_parser#MakePos(line('.')-1, col('.')-1), 1)
       if t.name == a:name
 	return a:name
       endif
@@ -1491,6 +1356,10 @@ endfu
 fu! s:GetClassPath()
   let path = s:GetJavaCompleteClassPath() . javacomplete#GetClassPathSep()
 
+  if &ft == 'jsp'
+    let path .= s:GetClassPathOfJsp()
+  endif
+
   if exists('b:classpath') && b:classpath !~ '^\s*$'
     return path . b:classpath
   endif
@@ -1525,6 +1394,36 @@ fu! s:GetJavaCompleteClassPath()
     endif
   endif
   return fnamemodify(classfile, ':p:h')
+endfu
+
+fu! s:GetClassPathOfJsp()
+  if exists('b:classpath_jsp')
+    return b:classpath_jsp
+  endif
+
+  let b:classpath_jsp = ''
+  let path = expand('%:p:h')
+  while 1
+    if isdirectory(path . '/WEB-INF' )
+      if isdirectory(path . '/WEB-INF/classes')
+	let b:classpath_jsp .= ';' . path . '/WEB-INF/classes'
+      endif
+      if isdirectory(path . '/WEB-INF/lib')
+	let libs = globpath(path . '/WEB-INF/lib', '*.jar')
+	if libs != ''
+	  let b:classpath_jsp .= ';' . substitute(libs, "\n", ';', 'g')
+	endif
+      endif
+      return b:classpath_jsp
+    endif
+
+    let prev = path
+    let path = fnamemodify(path, ":p:h:h")
+    if path == prev
+      break
+    endif
+  endwhile
+  return ''
 endfu
 
 " s:GetPackageName()							{{{2
@@ -1575,13 +1474,13 @@ fu! s:KeepCursor(cmd)
 endfu
 
 fu! s:InCommentOrLiteral(line, col)
-  if has("syntax")
+  if has("syntax") && &ft != 'jsp'
     return synIDattr(synID(a:line, a:col, 1), "name") =~? '\(Comment\|String\|Character\)'
   endif
 endfu
 
 function! s:InComment(line, col)
-  if has("syntax")
+  if has("syntax") && &ft != 'jsp'
     return synIDattr(synID(a:line, a:col, 1), "name") =~? 'comment'
   endif
 "  if getline(a:line) =~ '\s*\*'
@@ -1834,8 +1733,7 @@ fu! s:DoGetClassInfo(class, ...)
     endif
 
     call s:Info('A0. ' . a:class)
-    call javacomplete#parse()
-    let matchs = s:SearchTypeAt(b:ast, java_parser#MakePos(line('.')-1, col('.')-1))
+    let matchs = s:SearchTypeAt(javacomplete#parse(), java_parser#MakePos(line('.')-1, col('.')-1))
     let t = {}
     " FIXME:
     "let stat = s:GetStatement()
@@ -1870,7 +1768,7 @@ fu! s:DoGetClassInfo(class, ...)
   " Search class declaration in current buffer
   if s:FoundClassDeclaration(a:class) != 0
     call s:Info('A1. class in this buffer')
-    let ci = s:GetLocalClassInfo(a:class, '%')
+    let ci = s:GetClassInfoFromSource(a:class, '%')
     " do not cache it
     if !empty(ci)
       return ci
@@ -1891,7 +1789,7 @@ fu! s:DoGetClassInfo(class, ...)
       return s:cache[fqn]
     endif
 
-    let ci = s:GetLocalClassInfo(strpart(a:class, strridx(a:class, '.')+1, strlen(a:class)), file)
+    let ci = s:GetClassInfoFromSource(strpart(a:class, strridx(a:class, '.')+1, strlen(a:class)), file)
     if !empty(ci)
       let s:cache[fqn == '' ? a:class : fqn] = s:Sort(ci)
       return ci
@@ -1902,12 +1800,13 @@ fu! s:DoGetClassInfo(class, ...)
   call s:Info('A3. runtime loadable class')
   if fqn != ''
     let ci = s:DoGetReflectionClassInfo(fqn)
+    if !empty(ci)
+      return ci
+    endif
   endif
 
   " Assumption 4: a non-public class defined in current folder (or subfolder)
   if empty(ci)
-    " grep /'\<\(class\|interface\)\>[ \t\n\r]\+' . a:type . '[ \t\r\n]'/ in
-    " all path
   endif
 
   return ci
@@ -1962,7 +1861,7 @@ function! s:DoGetReflectionClassInfo(fqn)
   return get(s:cache, a:fqn, {})
 endfunction
 
-fu! s:GetLocalClassInfo(class, filename)
+fu! s:GetClassInfoFromSource(class, filename)
   let ci = {}
   if len(tagfiles()) > 0
     let ci = s:DoGetClassInfoFromTags(a:class)
@@ -1970,25 +1869,15 @@ fu! s:GetLocalClassInfo(class, filename)
 
   if empty(ci)
     call s:Info('Use java_parser.vim to generate class information')
-    if a:filename == '%'
-      call javacomplete#parse()
-      let ci = s:DoGetLocalClassInfo(a:class, b:ast)
-    else
-      call java_parser#InitParser(readfile(a:filename))
-      let unit = java_parser#compilationUnit()
-      let ci = s:DoGetLocalClassInfo(a:class, unit)
-    endif
+    let unit = javacomplete#parse(a:filename)
+    let targetPos = a:filename == '%' ? java_parser#MakePos(line('.')-1, col('.')-1) : -1
+    for t in s:SearchTypeAt(unit, targetPos, 1)
+      if t.name == a:class
+	return s:AddInheritedClassInfo(s:Tree2ClassInfo(t), t)
+      endif
+    endfor
   endif
   return ci
-endfu
-
-fu! s:DoGetLocalClassInfo(class, unit)
-  for t in s:SearchTypeAt(a:unit, -1)
-    if t.name == a:class
-      return s:AddInheritedClassInfo(s:Tree2ClassInfo(t), t)
-    endif
-  endfor
-  return {}
 endfu
 
 fu! s:Tree2ClassInfo(t)

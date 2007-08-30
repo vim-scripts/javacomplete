@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-28
-" Version:	0.66
+" Last Changed: 2007-08-30
+" Version:	0.66.1
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.66'
+let g:loaded_javaparser = 'v0.66.1'
 
 
 " Constants used by scanner and parser					{{{1
@@ -2175,11 +2175,9 @@ fu! s:classCreatorRest(newpos, encl, typeArgs, t)
   let args = s:arguments()
   let body = {}
   if b:token == 'LBRACE'
-    let pos = b:pos
-    let defs = s:classOrInterfaceBody('', 0)
-    let mods = {'tag': 'MODIFIERS', 'pos': -1, 'flags': 0}
-    let body = s:ClassDef(pos, mods)
-    let body.defs = defs
+    let body = s:ClassDef(b:pos, {})
+    let body.defs = s:classOrInterfaceBody('', 0)
+    let body.endpos = b:pos
   endif
   return {'tag': 'NEWCLASS', 'encl': a:encl, 'typeargs': a:typeArgs, 'clazz': a:t, 'args': args, 'def': body}
 endfu
