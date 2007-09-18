@@ -1,8 +1,8 @@
 " Vim autoload script for a JAVA PARSER and more.
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Changed: 2007-08-30
-" Version:	0.66.1
+" Last Changed: 2007-09-16
+" Version:	0.67
 " Copyright:	Copyright (C) 2007 cheng fang.	All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -10,7 +10,7 @@
 if exists("g:loaded_javaparser") || version < 700 || &cp
   finish
 endif
-let g:loaded_javaparser = 'v0.66.1'
+let g:loaded_javaparser = 'v0.67'
 
 
 " Constants used by scanner and parser					{{{1
@@ -24,7 +24,7 @@ let s:RE_ANYTHING_AND_NEWLINE	= '\(\(.\|\n\)*\)'
 let s:RE_LINE_COMMENT		= '//.*$'
 let s:RE_COMMENT_SP		= '/\*\*/'
 let s:RE_COMMENT		= ''
-let s:RE_BRACKETS		= '\(\[\s*\]\)'
+let s:RE_BRACKETS		= '\(\s*\[\s*\]\)'
 
 let s:RE_IDENTIFIER		= '[a-zA-Z_$][a-zA-Z0-9_$]*'
 let s:RE_QUALID			= s:RE_IDENTIFIER. '\(\s*\.\s*' .s:RE_IDENTIFIER. '\)*'
@@ -41,8 +41,8 @@ let s:RE_FORMAL_PARAM		= '\(final\s*\)\='. s:RE_TYPE . '\s\+' . s:RE_VAR_DECL_ID
 let s:RE_FORMAL_PARAM_LIST	= s:RE_FORMAL_PARAM . '\(\s*,\s*' . s:RE_FORMAL_PARAM . '\)*'
 let s:RE_FORMAL_PARAM2		= '^\s*\(final\s*\)\=\('. s:RE_TYPE . '\)\s\+\(' . s:RE_IDENTIFIER . '\)' . s:RE_BRACKETS . '*'
 
-let s:RE_MEMBER_MODS		= '\(PUBLIC\|PROTECTED\|PRIVATE\|ABSTRACT\|STATIC\|FINAL\|TRANSIENT\|VOLATILE\|SYNCHRONIZED\|NATIVE\|STRICTFP\)'
-let s:RE_MEMBER_HEADER		= '\s*\(\(' .s:RE_MEMBER_MODS. '\s\+\)\+\)\(' .s:RE_IDENTIFIER. '\(\s*\.\s*' .s:RE_IDENTIFIER. '\)*\)\(\s*\[\s*\]\)\=\s\+\(' .s:RE_IDENTIFIER. '\)'
+let s:RE_MEMBER_MODS		= '\%(PUBLIC\|PROTECTED\|PRIVATE\|ABSTRACT\|STATIC\|FINAL\|TRANSIENT\|VOLATILE\|SYNCHRONIZED\|NATIVE\|STRICTFP\)'
+let s:RE_MEMBER_HEADER		= '\s*\(\%(' .s:RE_MEMBER_MODS. '\s\+\)\+\)\(' .s:RE_IDENTIFIER. '\%(\s*\.\s*' .s:RE_IDENTIFIER. '\)*\%(\s*\[\s*\]\)*\)\s\+\(' .s:RE_IDENTIFIER. '\)'
 
 " API								{{{1
 
@@ -221,16 +221,6 @@ fu! java_parser#IsStatement(tree)
 endfu
 
 " Tree Helper						{{{1
-fu! s:qualident2Str(qualident)
-  let qi = a:qualident
-  let fqn = qi.name
-  while qi.tag == 'SELECT'
-    let qi = qi.selected
-    let fqn = qi.name . '.' . fqn
-  endwhile
-  return fqn
-endfu
-
 fu! java_parser#type2Str(type)
   if type(a:type) == type("")
     return a:type
@@ -244,7 +234,7 @@ fu! java_parser#type2Str(type)
   elseif t.tag == 'TYPEIDENT'
     return t.typetag
   elseif t.tag == 'SELECT'
-    return s:qualident2Str(t)
+    return java_parser#type2Str(t.selected) . '.' . t.name
   elseif t.tag == 'TYPEARRAY'
     return java_parser#type2Str(t.elementtype) . '[]'
   elseif t.tag == 'TYPEAPPLY'
@@ -2698,7 +2688,7 @@ fu! s:compilationUnit()
     endif
     call s:nextToken()
     let unit.pid = s:qualident()
-    let unit.package = s:qualident2Str(unit.pid)
+    let unit.package = java_parser#type2Str(unit.pid)
     call s:accept('SEMI')
   endif
 
@@ -2783,6 +2773,9 @@ fu! s:importDeclaration()
     endif
   endwhile
   let fqn = java_parser#type2Str(pid)
+  if b:token != 'SEMI'
+    let fqn .= '<SEMI expected>'
+  endif
   call s:accept('SEMI')
   "return {'tag': 'IMPORT', 'pos': b:pos, 'qualid': pid, 'staticImport': importStatic}
   return fqn
@@ -3066,10 +3059,8 @@ fu! s:classOrInterfaceBodyDeclaration(classname, isInterface)
 	  return [s:methodDeclaratorRest(pos, mods, type, name, typarams, a:isInterface, isVoid, dc)]
 	" field
 	elseif !isVoid && len(typarams) == 0
-	  let time3 = reltime()
 	  let defs = s:variableDeclaratorsRest(pos, mods, type, name, a:isInterface, dc, copy([]))
 	  call s:accept('SEMI')
-	  let b:et_perf .= "\r" . reltimestr(reltime(time3)) . ' varrest() '
 	  return defs
 	else
 	  call s:SyntaxError("LPAREN expected")
@@ -3085,7 +3076,7 @@ fu! s:classOrInterfaceBodyDeclaration_opt(classname, isInterface)
     let str = b:lines[b:line]
     let idx = matchend(str, s:RE_MEMBER_HEADER)
     if idx != -1
-      let subs = split(substitute(strpart(str, 0, idx), s:RE_MEMBER_HEADER, '\1;\4;\7', ''), ';')
+      let subs = split(substitute(strpart(str, 0, idx), s:RE_MEMBER_HEADER, '\1;\2;\3', ''), ';')
       let name_ = subs[2]
       let type_ = subs[1]
       let flag_ = s:String2Flags(subs[0])
