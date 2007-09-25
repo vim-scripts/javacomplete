@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Sep 19
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2007 Sep 26
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -62,16 +62,18 @@ You can download the lastest version from this url:
 
 1.4 Install					*javacomplete-install*
 
-1. Unzip javacomplete.vim, java_parser.vim and Reflection.java from 
-javacomplete.zip to an autoload directory of 'runtimepath', e.g. 
-$HOME/.vim/autoload (unix/linux), $VIM/vimfiles/autoload (windows).
-   Unzip javacomplete.txt to a help directory, e.g.
-$HOME/.vim/doc (unix/linux), $VIM/vimfiles/doc (windows).
+1. Unzip javacomplete.zip to a directory of 'runtimepath', e.g.
+$HOME/.vim (unix/linux), $VIM/vimfiles (windows). >
+	> unzip javacomplete.zip -d ~/.vim
 
-    To update Vim help tags, run vim and run command: >
+<   To update Vim help tags, run vim and run command: >
 	:helptags $HOME/.vim/doc
 <   or >
 	:helptags $VIM/vimfiles/doc
+
+NOTE: javacomplete.vim, java_parser.vim and Reflection.java should be in one
+autoload directory of 'runtimepath'.
+javacomplete.txt should be in one doc directory of 'runtimepath'.
 
 2. Set 'omnifunc' option. e.g. >
 	:setlocal omnifunc=javacomplete#Complete
@@ -82,7 +84,13 @@ $HOME/.vim/doc (unix/linux), $VIM/vimfiles/doc (windows).
 	:endif
 You can add this command to your .vimrc or _vimrc.
 
-3. Reflection.java will be automatcally compiled and placed to $HOME when you
+3. Set 'completefunc' option to show parameters information IF YOU LIKE. e.g. >
+	:setlocal completefunc=javacomplete#CompleteParamsInfo
+You can map as follows for better display: >
+	:inoremap <buffer> <C-X><C-U> <C-X><C-U><C-P>
+	:inoremap <buffer> <C-S-Space> <C-X><C-U><C-P>
+
+4. Reflection.java will be automatcally compiled and placed to $HOME when you
 use first time. Assure that Reflection.java is in the same directory with
 javacomplete.vim to be searched in autoload subdirectory of &rtp. 
 If no Reflection.class is generated, check that you have the write permission
@@ -316,6 +324,10 @@ The embedded parser works a bit slower than expected.
 
 6.1 javacomplete				*javacomplete-history*
 
+v0.77.1
+    2007-09-19	Supported showing method parameters information in any place
+    		between parenthesises.
+
 v0.77
     2007-09-19	bug fix
     2007-09-18	Added GetCurrentFileKey() avoid empty key of s:files for current buffer.
@@ -518,12 +530,11 @@ v0.7  2007-02-17
 ==============================================================================
 7. Todo						*javacomplete-todo*
 
--  Add javadoc
--  Give parameter information not just after '('.
--  Support parameter information for template
--  Give a hint for class name conflict in different packages.
+-  Improve performance of the embedded parser. Incremental parser.
 -  Add quick information using balloonexpr, ballooneval, balloondelay.
--  Improve performance of the embedded parser.
+-  Add javadoc
+-  Give a hint for class name conflict in different packages.
+-  Support parameter information for template
 
 ==============================================================================
 8. Thanks					*javacomplete-thanks*
@@ -537,6 +548,7 @@ v0.7  2007-02-17
 		Vissale NEANG		author of OmniCppComplete
 		David Fishburn		author of SQLComplete and others
 		Nico Weber		testing on the Mac
+		Thomas Link		testing on cygwin+bash
 		Zhixing Yu
 
 FeedBack:

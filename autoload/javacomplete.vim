@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.77
+" Version:	0.77.1
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-09-19
+" Last Change:	2007-09-26
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -83,7 +83,8 @@ let s:RE_TYPE_WITH_ARGUMENTS_I	= s:RE_IDENTIFIER . '\s*' . s:RE_TYPE_ARGUMENTS
 let s:RE_TYPE_WITH_ARGUMENTS	= s:RE_TYPE_WITH_ARGUMENTS_I . '\%(\s*' . s:RE_TYPE_WITH_ARGUMENTS_I . '\)*'
 
 let s:RE_TYPE_MODS	= '\%(public\|protected\|private\|abstract\|static\|final\|strictfp\)'
-let s:RE_TYPE_DECL	= '\<\C\(\%(' .s:RE_TYPE_MODS. '\s\+\)*\)\(class\|interface\|enum\)[ \t\n\r]\+\([a-zA-Z_$][a-zA-Z0-9_$]*\)[< \t\n\r]'
+let s:RE_TYPE_DECL_HEAD	= '\(class\|interface\|enum\)[ \t\n\r]\+'
+let s:RE_TYPE_DECL	= '\<\C\(\%(' .s:RE_TYPE_MODS. '\s\+\)*\)' .s:RE_TYPE_DECL_HEAD. '\(' .s:RE_IDENTIFIER. '\)[< \t\n\r]'
 
 let s:RE_ARRAY_TYPE	= '^\s*\(' .s:RE_QUALID . '\)\(' . s:RE_BRACKETS . '\+\)\s*$'
 let s:RE_SELECT_OR_ACCESS	= '^\s*\(' . s:RE_IDENTIFIER . '\)\s*\(\[.*\]\)\=\s*$'
@@ -535,11 +536,10 @@ function! s:CompleteAfterDot(expr)
 
     " array access:	"var[i][j].|"		Note: "var[i][]" is incorrect
     elseif items[0] =~# s:RE_ARRAY_ACCESS
-      call s:Info('array access. "' . items[0] . '"')
       let subs = split(substitute(items[0], s:RE_ARRAY_ACCESS, '\1;\2', ''), ';')
-      if !empty(subs) && subs[1] !~ s:RE_BRACKETS
+      if get(subs, 1, '') !~ s:RE_BRACKETS
 	let typename = s:GetDeclaredClassName(subs[0])
-	call s:Info('ArrayAccess. "var[i][j].|"  typename: "' . typename . '"')
+	call s:Info('ArrayAccess. "' .items[0]. '.|"  typename: "' . typename . '"')
 	if (typename != '')
 	  let ti = s:ArrayAccess(typename, items[0])
 	endif
@@ -725,6 +725,37 @@ endfunction
 "set bexpr=MyBalloonExpr()
 "set ballooneval
 
+" parameters information					{{{1
+fu! javacomplete#CompleteParamsInfo(findstart, base)
+  if a:findstart
+    return col('.') - 1
+  endif
+
+  
+  let mi = s:GetMethodInvocationExpr(s:GetStatement())
+  if empty(mi.method)
+    return []
+  endif
+
+  " TODO: how to determine overloaded functions
+  "let mi.params = s:EvalParams(mi.params)
+  if empty(mi.expr)
+    let methods = s:SearchForName(mi.method, 0, 1)[1]
+    let result = eval('[' . s:DoGetMethodList(methods) . ']')
+  elseif mi.method == '+'
+    let result = s:GetConstructorList(mi.expr)
+  else
+    let result = s:CompleteAfterDot(mi.expr)
+  endif
+
+  if !empty(result)
+    if !empty(mi.method) && mi.method != '+'
+      let result = filter(result, "type(v:val) == type('') ? v:val ==# '" . mi.method . "' : v:val['word'] ==# '" . mi.method . "('")
+    endif
+    return result
+  endif
+endfu
+
 " scanning and parsing							{{{1
 
 " Search back from the cursor position till meeting '{' or ';'.
@@ -869,6 +900,36 @@ fu! s:ProcessParentheses(expr, ...)
     return s:ParseExpr(a:expr)
   endif
   return [a:expr]
+endfu
+
+" return {'expr': , 'method': , 'params': }
+fu! s:GetMethodInvocationExpr(expr)
+  let idx = strlen(a:expr)-1 
+  while idx >= 0
+    if a:expr[idx] == '('
+      break
+    elseif a:expr[idx] == ')'
+      let idx = s:SearchPairBackward(a:expr, idx, '(', ')')
+    elseif a:expr[idx] == ']'
+      let idx = s:SearchPairBackward(a:expr, idx, '[', ']')
+    endif
+    let idx -= 1
+  endwhile
+
+  let mi = {'expr': strpart(a:expr, 0, idx+1), 'method': '', 'params': strpart(a:expr, idx+1)}
+  let idx = match(mi.expr, '\<new\s\+' . s:RE_QUALID . '\s*(\s*$')
+  if idx >= 0
+    let mi.method = '+'
+    let mi.expr = substitute(matchstr(strpart(mi.expr, idx+4), s:RE_QUALID), '\s', '', 'g')
+  else
+    let idx = match(mi.expr, '\<' . s:RE_IDENTIFIER . '\s*(\s*$')
+    if idx >= 0
+      let subs = s:SplitAt(mi.expr, idx-1)
+      let mi.method = substitute(subs[1], '\s*(\s*$', '', '')
+      let mi.expr = s:ExtractCleanExpr(subs[0])
+    endif
+  endif
+  return mi
 endfu
 
 " imports							{{{1
@@ -1715,12 +1776,12 @@ fu! s:GetClassPathOfJsp()
   while 1
     if isdirectory(path . '/WEB-INF' )
       if isdirectory(path . '/WEB-INF/classes')
-	let b:classpath_jsp .= ';' . path . '/WEB-INF/classes'
+	let b:classpath_jsp .= s:PATH_SEP . path . '/WEB-INF/classes'
       endif
       if isdirectory(path . '/WEB-INF/lib')
 	let libs = globpath(path . '/WEB-INF/lib', '*.jar')
 	if libs != ''
-	  let b:classpath_jsp .= ';' . substitute(libs, "\n", ';', 'g')
+	  let b:classpath_jsp .= s:PATH_SEP . substitute(libs, "\n", s:PATH_SEP, 'g')
 	endif
       endif
       return b:classpath_jsp
@@ -1868,6 +1929,10 @@ endfu
 fu! s:Trim(str)
   let str = substitute(a:str, '^\s*', '', '')
   return substitute(str, '\s*$', '', '')
+endfu
+
+fu! s:SplitAt(str, index)
+  return [strpart(a:str, 0, a:index+1), strpart(a:str, a:index+1)]
 endfu
 
 " TODO: search pair used in string, like 
