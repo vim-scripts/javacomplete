@@ -1,8 +1,8 @@
 " Vim completion script	- hit 80% complete tasks
-" Version:	0.77.1.1
+" Version:	0.77.1.2
 " Language:	Java
 " Maintainer:	cheng fang <fangread@yahoo.com.cn>
-" Last Change:	2007-09-26
+" Last Change:	2011-01-30
 " Copyright:	Copyright (C) 2006-2007 cheng fang. All rights reserved.
 " License:	Vim License	(see vim's :help license)
 
@@ -1158,13 +1158,13 @@ endfu
 
 fu! s:FoundClassLocally(type)
   " current path
-  if globpath(expand('%:p:h'), a:type . '.java', 1) != ''
+  if globpath(expand('%:p:h'), a:type . '.java') != ''
     return 1
   endif
 
   " 
   let srcpath = javacomplete#GetSourcePath(1)
-  let file = globpath(srcpath, substitute(fqn, '\.', '/', 'g') . '.java', 1)
+  let file = globpath(srcpath, substitute(fqn, '\.', '/', 'g') . '.java')
   if file != ''
     return 1
   endif
@@ -1746,23 +1746,37 @@ fu! s:GetClassPath()
 endfu
 
 fu! s:GetJavaCompleteClassPath()
-  let classfile = globpath(&rtp, 'autoload/Reflection.class', 1)
+  " remove *.class from wildignore if it exists, so that globpath doesn't ignore Reflection.class
+  " vim versions >= 702 can add the 1 flag to globpath which ignores '*.class" in wildingore
+  let has_class = 0
+  if &wildignore =~# "*.class"
+    set wildignore-=*.class
+    let has_class = 1
+  endif
+
+  let classfile = globpath(&rtp, 'autoload/Reflection.class')
   if classfile == ''
-    let classfile = globpath($HOME, 'Reflection.class', 1)
+    let classfile = globpath($HOME, 'Reflection.class')
   endif
   if classfile == ''
     " try to find source file and compile to $HOME
-    let srcfile = globpath(&rtp, 'autoload/Reflection.java', 1)
+    let srcfile = globpath(&rtp, 'autoload/Reflection.java')
     if srcfile != ''
       exe '!' . javacomplete#GetCompiler() . ' -d "' . $HOME . '" "' . srcfile . '"'
-      let classfile = globpath($HOME, 'Reflection.class', 1)
+      let classfile = globpath($HOME, 'Reflection.class')
       if classfile == ''
-	echo srcfile . ' can not be compiled. Please check it'
+        echo srcfile . ' can not be compiled. Please check it'
       endif
     else
       echo 'No Reflection.class found in $HOME or any autoload directory of the &rtp. And no Reflection.java found in any autoload directory of the &rtp to compile.'
     endif
   endif
+
+  " add *.class to wildignore if it existed before
+  if has_class == 1
+    set wildignore+=*.class
+  endif
+
   return fnamemodify(classfile, ':p:h')
 endfu
 
@@ -1779,7 +1793,7 @@ fu! s:GetClassPathOfJsp()
 	let b:classpath_jsp .= s:PATH_SEP . path . '/WEB-INF/classes'
       endif
       if isdirectory(path . '/WEB-INF/lib')
-	let libs = globpath(path . '/WEB-INF/lib', '*.jar', 1)
+	let libs = globpath(path . '/WEB-INF/lib', '*.jar')
 	if libs != ''
 	  let b:classpath_jsp .= s:PATH_SEP . substitute(libs, "\n", s:PATH_SEP, 'g')
 	endif
@@ -2182,7 +2196,7 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
   let files = {}	" fqn -> java file path
   for fqn in a:fqns
     " toplevel type
-    let filepath = globpath(a:srcpath, substitute(fqn, '\.', '/', 'g') . '.java', 1)
+    let filepath = globpath(a:srcpath, substitute(fqn, '\.', '/', 'g') . '.java')
     if filepath != ''
       let files[fqn] = expand(filepath)
 
@@ -2191,7 +2205,7 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
       let idents = split(fqn, '\.')
       let i = len(idents)-2
       while i >= 0
-	let filepath = globpath(a:srcpath, join(idents[:i], '/') . '.java', 1)
+	let filepath = globpath(a:srcpath, join(idents[:i], '/') . '.java')
 	if filepath != ''
 	  let files[fqn] = expand(filepath)
 	  break
@@ -2896,7 +2910,7 @@ fu! s:DoGetPackageInfoInDirs(package, onlyPackages, ...)
 
   let globpattern  = a:0 > 0 ? a:package . '*' : substitute(a:package, '\.', '/', 'g') . '/*'
   let matchpattern = a:0 > 0 ? a:package : a:package . '[\\/]'
-  for f in split(globpath(join(pathes, ','), globpattern, 1), "\n")
+  for f in split(globpath(join(pathes, ','), globpattern), "\n")
       for path in pathes
 	let idx = matchend(f, escape(path, ' \') . '[\\/]\?\C' . matchpattern)
 	if idx != -1

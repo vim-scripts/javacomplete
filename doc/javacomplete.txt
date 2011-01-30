@@ -1,4 +1,4 @@
-*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2010-11-12
+*javacomplete.txt*	For Vim version 7.0 and above. Last change: 2011-01-30
 
 		    JAVACOMPLETE REFERENCE MANUAL	by cheng fang~
 		    					fangread@yahoo.com.cn~
@@ -323,6 +323,9 @@ The embedded parser works a bit slower than expected.
 6. History					
 
 6.1 javacomplete				*javacomplete-history*
+
+v0.77.1.2
+    2011-01-30	Fixed to adapt globpath() (vim < 7.2). Patched by Sam Lidder.
 
 v0.77.1.1
     2010-11-12	Fixed to ignore the 'suffixes' and 'wildignore' options which 
