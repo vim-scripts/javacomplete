@@ -1684,7 +1684,7 @@ endfu
 
 " classpath								{{{2
 fu! javacomplete#AddClassPath(s)
-  if !isdirectory(a:s)
+  if !isdirectory(a:s) && !match(a:s, '\.jar$')
     echoerr 'invalid classpath: ' . a:s
     return
   endif
