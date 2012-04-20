@@ -1756,19 +1756,19 @@ fu! s:GetJavaCompleteClassPath()
 
   let classfile = globpath(&rtp, 'autoload/Reflection.class')
   if classfile == ''
-    let classfile = globpath($HOME, 'Reflection.class')
+    let classfile = globpath($HOME, '/.vim/Reflection.class')
   endif
   if classfile == ''
     " try to find source file and compile to $HOME
     let srcfile = globpath(&rtp, 'autoload/Reflection.java')
     if srcfile != ''
-      exe '!' . javacomplete#GetCompiler() . ' -d "' . $HOME . '" "' . srcfile . '"'
-      let classfile = globpath($HOME, 'Reflection.class')
+      exe '!' . javacomplete#GetCompiler() . ' -d "' . $HOME . '"/.vim "' . srcfile . '"'
+      let classfile = globpath($HOME, '/.vim/Reflection.class')
       if classfile == ''
         echo srcfile . ' can not be compiled. Please check it'
       endif
     else
-      echo 'No Reflection.class found in $HOME or any autoload directory of the &rtp. And no Reflection.java found in any autoload directory of the &rtp to compile.'
+      echo 'No Reflection.class found in $HOME/.vim or any autoload directory of the &rtp. And no Reflection.java found in any autoload directory of the &rtp to compile.'
     endif
   endif
 
