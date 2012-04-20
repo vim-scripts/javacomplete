@@ -152,7 +152,7 @@ function! javacomplete#Complete(findstart, base)
 
       else
 	" type declaration		NOTE: not supported generic yet.
-	let idx_type = matchend(statement, '^\s*' . s:RE_TYPE_DECL)
+	silent! let idx_type = matchend(statement, '^\s*' . s:RE_TYPE_DECL)
 	if idx_type != -1
 	  let b:dotexpr = strpart(statement, idx_type)
 	  " return if not after extends or implements
@@ -345,12 +345,12 @@ fu! s:CompleteAfterWord(incomplete)
     for dirpath in s:GetSourceDirs(expand('%:p'))
       let filepatterns .= escape(dirpath, ' \') . '/*.java '
     endfor
-    exe 'vimgrep /\s*' . s:RE_TYPE_DECL . '/jg ' . filepatterns
+    silent! exe 'vimgrep /\s*' . s:RE_TYPE_DECL . '/jg ' . filepatterns
     for item in getqflist()
       if item.text !~ '^\s*\*\s\+'
-	let text = matchstr(s:Prune(item.text, -1), '\s*' . s:RE_TYPE_DECL)
+	silent! let text = matchstr(s:Prune(item.text, -1), '\s*' . s:RE_TYPE_DECL)
 	if text != ''
-	  let subs = split(substitute(text, '\s*' . s:RE_TYPE_DECL, '\1;\2;\3', ''), ';', 1)
+	  silent! let subs = split(substitute(text, '\s*' . s:RE_TYPE_DECL, '\1;\2;\3', ''), ';', 1)
 	  if subs[2] =~# '^' . a:incomplete && (subs[0] =~ '\C\<public\>' || fnamemodify(bufname(item.bufnr), ':p:h') == expand('%:p:h'))
 	    call add(types, {'kind': 'C', 'word': subs[2]})
 	  endif
@@ -2247,12 +2247,12 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
     endfor
 
     let cwd = fnamemodify(expand('%:p:h'), ':p:h:gs?[\\/]\+?/?')
-    exe 'vimgrep /\s*' . s:RE_TYPE_DECL . '/jg ' . filepatterns
+    silent! exe 'vimgrep /\s*' . s:RE_TYPE_DECL . '/jg ' . filepatterns
     for item in getqflist()
       if item.text !~ '^\s*\*\s\+'
-	let text = matchstr(s:Prune(item.text, -1), '\s*' . s:RE_TYPE_DECL)
+	silent! let text = matchstr(s:Prune(item.text, -1), '\s*' . s:RE_TYPE_DECL)
 	if text != ''
-	  let subs = split(substitute(text, '\s*' . s:RE_TYPE_DECL, '\1;\2;\3', ''), ';', 1)
+	  silent! let subs = split(substitute(text, '\s*' . s:RE_TYPE_DECL, '\1;\2;\3', ''), ';', 1)
 	  let dirpath = fnamemodify(bufname(item.bufnr), ':p:h:gs?[\\/]\+?/?')
 	  let idents = dirs[dirpath].idents
 	  if index(idents, subs[2]) >= 0 && (subs[0] =~ '\C\<public\>' || dirpath == cwd)	" FIXME?
