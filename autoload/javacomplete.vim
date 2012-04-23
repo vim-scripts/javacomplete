@@ -2979,6 +2979,8 @@ fu! s:GetAndroidClassPath(path)
   let msg = system('ant -q -f "' . buildfile . '" -Dbasedir="' . s:GetAndroidProjectRoot(a:path) . '" listclasspath')
   let classpath = substitute(msg, '.\{-}CLASSPATH{\([^}]*\)}.*', '\=submatch(1)', "")
   let s:android_project_classpath_cache[s:GetAndroidProjectRoot(a:path)] = classpath
+
+  return classpath
 endfu
 
 fu! s:GetCurrentAndroidClassPath()
