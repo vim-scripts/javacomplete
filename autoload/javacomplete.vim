@@ -96,9 +96,9 @@ let s:RE_KEYWORDS  = '\<\%(' . join(s:KEYWORDS, '\|') . '\)\>'
 
 " local variables            {{{1
 let b:context_type = s:CONTEXT_OTHER
-"let b:statement = ''      " statement before cursor
-let b:dotexpr = ''      " expression ends with '.'
-let b:incomplete = ''      " incomplete word: 1. dotexpr.method(|) 2. new classname(|) 3. dotexpr.ab|, 4. ja|, 5. method(|
+"let b:statement = ''        " statement before cursor
+let b:dotexpr = ''           " expression ends with '.'
+let b:incomplete = ''        " incomplete word: 1. dotexpr.method(|) 2. new classname(|) 3. dotexpr.ab|, 4. ja|, 5. method(|
 let b:errormsg = ''
 
 " script variables            {{{1
@@ -2928,4 +2928,65 @@ fu! s:DoGetPackageInfoInDirs(package, onlyPackages, ...)
 endfu
 " }}}
 "}}}
+
+" Android support
+
+function! s:shellslash(path)
+  if exists('+shellslash') && !&shellslash
+    return s:gsub(a:path,'\\','/')
+  else
+    return a:path
+  endif
+endfunction
+
+fu! s:GetAndroidProjectRoot(path)
+  if exists('b:android_project_root')
+    return b:android_project_root
+  endif
+
+  let root = s:shellslash(simplify(fnamemodify(a:path, ':p:s?[\/]$??')))
+  let previous = ""
+  while root !=# previous
+    let dir = globpath(root, "AndroidManifest.xml")
+    if dir != ''
+      let b:android_project_root = root
+      return root
+    endif
+    let previous = root
+    let root = fnamemodify(root, ':h')
+  endwhile
+
+  return ''
+endfu
+
+fu! s:GetAndroidClassPath(path)
+  if s:GetAndroidProjectRoot(a:path) == ''
+    return ""
+  endif
+
+  if !(exists('s:android_project_classpath_cache'))
+    let s:android_project_classpath_cache = {}
+  endif
+
+  if has_key(s:android_project_classpath_cache, s:GetAndroidProjectRoot(a:path))
+    return s:android_project_classpath_cache[s:GetAndroidProjectRoot(a:path)]
+  endif
+
+  let buildfile = globpath(&rtp, 'autoload/android_listclasspath.xml')
+  if buildfile == ''
+    return ""
+  endif
+  let msg = system('ant -q -f "' . buildfile . '" -Dbasedir="' . s:GetAndroidProjectRoot(a:path) . '" listclasspath')
+  let classpath = substitute(msg, '.\{-}CLASSPATH{\([^}]*\)}.*', '\=submatch(1)', "")
+  let s:android_project_classpath_cache[s:GetAndroidProjectRoot(a:path)] = classpath
+endfu
+
+fu! s:GetCurrentAndroidClassPath()
+  return s:GetAndroidClassPath(expand('%:p'))
+endfu
+
+fu! javacomplete#AddAndroidClassPath()
+  call javacomplete#AddClassPath(s:GetCurrentAndroidClassPath())
+endfu
+
 " vim:set fdm=marker sw=2 nowrap:
