@@ -16,7 +16,12 @@
     <import file="${sdk.dir}/tools/ant/build.xml" />
 
     <target name="listclasspath" depends="-set-debug-mode, -build-setup">
-      <echo message="CLASSPATH{${toString:android.target.classpath}${path.separator}${toString:project.libraries.jars}}" />
+      <property name="toString:project.all.jars.path" value="" />
+      <property name="toString:tested.project.classpath" value="" />
+      <property name="toString:project.target.class.path" value="" />
+      <property name="toString:project.libraries.jars" value="" />
+      <property name="toString:android.target.classpath" value="" />
+      <echo message="CLASSPATH{${toString:project.all.jars.path}${path.separator}${toString:tested.project.classpath}${path.separator}${toString:project.target.class.path}${path.separator}${toString:android.target.classpath}${path.separator}${toString:project.libraries.jars}}" />
     </target>
 
 </project>
