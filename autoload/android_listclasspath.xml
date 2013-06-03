@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="AndroidHelper">
+
+    <property file="local.properties" />
+    <property file="ant.properties" />
+    <loadproperties srcFile="project.properties" />
+
+    <!-- quick check on sdk.dir -->
+    <fail
+            message="sdk.dir is missing. Make sure to generate local.properties using 'android update project' or to inject it through an env var"
+            unless="sdk.dir"
+    />
+
+    <import file="custom_rules.xml" optional="true" />
+
+    <import file="${sdk.dir}/tools/ant/build.xml" />
+
+    <target name="listclasspath" depends="-set-debug-mode, -build-setup">
+      <property name="toString:project.all.jars.path" value="" />
+      <property name="toString:tested.project.classpath" value="" />
+      <property name="toString:project.target.class.path" value="" />
+      <property name="toString:project.libraries.jars" value="" />
+      <property name="toString:android.target.classpath" value="" />
+      <echo message="CLASSPATH{${toString:project.all.jars.path}${path.separator}${toString:tested.project.classpath}${path.separator}${toString:project.target.class.path}${path.separator}${toString:android.target.classpath}${path.separator}${toString:project.libraries.jars}}" />
+    </target>
+
+</project>
