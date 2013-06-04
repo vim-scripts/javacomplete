@@ -1764,7 +1764,7 @@ fu! s:GetJavaCompleteClassPath()
     let classdir = s:ConvertToJavaPath(fnamemodify(srcfile, ':h'))
 
     if srcfile != ''
-      s:System(javacomplete#GetCompiler() . ' -d ' . shellescape(classdir) . ' ' . shellescape(srcfile))
+      let result = s:System(javacomplete#GetCompiler() . ' -d ' . shellescape(classdir) . ' ' . shellescape(srcfile), "GetJavaCompleteClassPath")
       let classfile = globpath(&rtp, 'autoload/Reflection.class')
       if classfile == ''
         echo srcfile . ' can not be compiled. Please check it'
@@ -1858,7 +1858,7 @@ fu! s:ConvertToJavaPath(path)
       return substitute(s:System("cygpath --windows " . shellescape(a:path), "ConvertToJavaPath"), "\n", "", "")
     endif
   else
-    return path
+    return a:path
   endif
 endfu
 
