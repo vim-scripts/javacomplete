@@ -10,7 +10,8 @@ This is a fork of the [mirror](https://github.com/vim-scripts/javacomplete) of h
 
   * [Features](#features)
   * [Requirements](#requirements)
-  * [How it works](#how-it-works)
+  * [What it offers](#what-it-offers)
+  * [How to contribute](#how-to-contribute)
   * [Limitations](#limits)
   * [TODOs](#todos)
   * [Credits](#credits)
@@ -38,7 +39,7 @@ It works on all the platforms where
 existed 
 
 
-## <a name="how-it-works"></a>How it works
+## <a name="what-it-offers"></a>What it offers
 
 It recognize nearly all kinds of Primary Expressions (see langspec-3.0)
 except for "Primary.new Indentifier". Casting conversion is also supported.
@@ -126,6 +127,17 @@ The above are in simple expression.
   * "for (int i = 0; i < str.|; i++)"
   * "for ( Object o : a.getCollect| )"
 
+
+## <a name="how-to-contribute"></a>How to contribute
+
+Open a pull request.
+
+At the moment, this is pretty the original project.  
+The only changes I made are:
+  * Changed the `s:Log` function to write in a file under `/tmp/` in this way I can debug what happens (the plugin is pretty complex to follow)
+  * Added a huge amount of logs
+  * Disabled the collection of data from `tags` because it is really bugged: in a sense that it collects data from tags and then it expects a format that is absolutely not matching with the content returned by that function
+  * Added [vim-vspec](https://github.com/kana/vim-vspec) in order to add tests so that the changing it would not break everything
 
 ## <a name="limits"></a>Limitations
 
