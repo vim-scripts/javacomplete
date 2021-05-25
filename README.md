@@ -137,7 +137,7 @@ The only changes I made are:
   * Changed the `s:Log` function to write in a file under `/tmp/` in this way I can debug what happens (the plugin is pretty complex to follow)
   * Added a huge amount of logs
   * Disabled the collection of data from `tags` because it is really bugged: in a sense that it collects data from tags and then it expects a format that is absolutely not matching with the content returned by that function
-  * Added [vim-vspec](https://github.com/kana/vim-vspec) in order to add tests so that the changing it would not break everything
+  * Added [vim-vspec](https://github.com/kana/vim-vspec) in order to add tests so that changing it would not break everything
 
 
 ## <a name="limits"></a>Limitations
