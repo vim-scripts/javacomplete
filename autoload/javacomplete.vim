@@ -643,6 +643,7 @@ function! s:CompleteAfterDot(expr)
 
 
 	" type info or package info --> members
+	call s:Debug('[s:CompleteAfterDot] ... final attempt. ti = ' . string(ti) . '; itemkind = ' . itemkind)
 	if !empty(ti)
 		if type(ti) == type({})
 			if get(ti, 'tag', '') == 'CLASSDEF'
@@ -2775,6 +2776,7 @@ fu! s:CanAccess(mods, kind)
 endfu
 
 fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
+	call s:Trace('[s:SearchMember] Searching members: ci = ' . string(a:ci) . ', name = ' . a:name . ', fullmatch = ' . a:fullmatch . ', kind = ' . a:kind . ', returnAll = ' . a:returnAll . ', memberkind = ' . a:memberkind . ' ...')
 	let result = [[], [], []]
 
 	if a:kind != 13
@@ -2787,6 +2789,7 @@ fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
 		endfor
 
 		for m in (a:0 > 0 && a:1 ? [] : get(a:ci, 'methods', [])) + ((a:kind == 1 || a:kind == 2) ? get(a:ci, 'declared_methods', []) : [])
+			call s:Trace('[s:SearchMember] ... checking method ' . string(m) . '...')
 			if empty(a:name) || (a:fullmatch ? m.n ==# a:name : m.n =~# '^' . a:name)
 				if s:CanAccess(m.m, a:kind)
 					call add(result[1], m)
@@ -2817,6 +2820,7 @@ fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
 			let result[2] += members[2]
 		endfor
 	endif
+	call s:Trace('[s:SearchMember] ... OK, returning ' . string(result))
 	return result
 endfu
 
@@ -2832,11 +2836,14 @@ fu! s:DoGetFieldList(fields)
 endfu
 
 fu! s:DoGetMethodList(methods, ...)
+	call s:Trace('[s:DoGetMethodList] Retrieving method list from ' . string(a:methods) . ' (additional params: ' . join(a:000, ', ') . ')')
 	let paren = a:0 == 0 || !a:1 ? '(' : ''
 	let s = ''
 	for method in a:methods
+		call s:Debug('[s:DoGetMethodList] ... checking method ' . string(method) . '...')
 		let s .= "{'kind':'" . (s:IsStatic(method.m) ? "M" : "m") . "','word':'" . method.n . paren . "','abbr':'" . method.n . "()','menu':'" . method.d . "','dup':'1'},"
 	endfor
+	call s:Trace('[s:DoGetMethodList] ... OK, returning ' . s)
 	return s
 endfu
 
@@ -2847,13 +2854,16 @@ endfu
 "	13 - for import or extends or implements, only nested types
 "	20 - for package
 fu! s:DoGetMemberList(ci, kind)
+	call s:Trace('[s:DoGetMemberList] Retrieving member list of kind ' . a:kind . ' from ' . string(a:ci) . ' ...')
 	if type(a:ci) != type({}) || a:ci == {}
+		call s:Trace('[s:DoGetMemberList] ... no data provided. Returning empty')
 		return []
 	endif
 
 	let s = a:kind == 11 ? "{'kind': 'C', 'word': 'class', 'menu': 'Class'}," : ''
 
 	let members = s:SearchMember(a:ci, '', 1, a:kind, 1, 0, a:kind == 2)
+	call s:Debug('[s:DoGetMemberList] ... members obtained are: ' . join(members, ', '))
 
 	" add accessible member types
 	if a:kind / 10 != 0
@@ -2900,7 +2910,9 @@ fu! s:DoGetMemberList(ci, kind)
 		let s = substitute(s, '\<java\.lang\.', '', 'g')
 		let s = substitute(s, '\<\(public\|static\|synchronized\|transient\|volatile\|final\|strictfp\|serializable\|native\)\s\+', '', 'g')
 	endif
-	return eval('[' . s . ']')
+	let ret = eval('[' . s . ']')
+	call s:Trace('[s:DoGetMemberList] ... OK, returning [' . join(ret, ', ') . ']')
+	return ret
 endfu
 
 " interface							{{{2
