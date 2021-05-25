@@ -47,73 +47,84 @@ Samples of input contexts are as following:	('|' indicates cursor)
 
 ### after '.', list members of a class or a package
 
-   * package.|         subpackages and classes of a package
-   * Type.|                static members of the 'Type' class and "class"
-   * var.| or field.|     members of a variable or a field
-   * method().|         members of result of method()
-   * this.|                   members of the current class
-   * ClassName.this.|  members of the qualified class
-   * super.|               members of the super class
-   * array.|                members of an array object
-   * array[i].|             array access, return members of the element of array
-   * "String".|            String literal, return members of java.lang.String
-   * int.| or void.|       primitive type or pseudo-type, return "class"
-   * int[].|                   array type, return members of a array type and "class"
-   * java.lang.String[].|
-   * new int[].|           members of the new array instance
-   * new java.lang.String[i=1][].|
-   * new Type().|      members of the new class instance 
-   * Type.class.|      class literal, return members of java.lang.Class
-   * void.class.| or int.class.|
-   * ((Type)var).|         cast var as Type, return members of Type.
-   * (var.method()).|   same with "var.|"
-   * (new Class()).|    same with "new Class().|"
+  * package.|         subpackages and classes of a package
+  * Type.|                static members of the 'Type' class and "class"
+  * var.| or field.|     members of a variable or a field
+  * method().|         members of result of method()
+  * this.|                   members of the current class
+  * ClassName.this.|  members of the qualified class
+  * super.|               members of the super class
+  * array.|                members of an array object
+  * array[i].|             array access, return members of the element of array
+  * "String".|            String literal, return members of java.lang.String
+  * int.| or void.|       primitive type or pseudo-type, return "class"
+  * int[].|                   array type, return members of a array type and "class"
+  * java.lang.String[].|
+  * new int[].|           members of the new array instance
+  * new java.lang.String[i=1][].|
+  * new Type().|      members of the new class instance 
+  * Type.class.|      class literal, return members of java.lang.Class
+  * void.class.| or int.class.|
+  * ((Type)var).|         cast var as Type, return members of Type.
+  * (var.method()).|   same with "var.|"
+  * (new Class()).|    same with "new Class().|"
 
 
 ### after '(', list matching methods with parameters information.
 
-   * method(|)                 methods matched
-   * var.method(|)           methods matched
-   * new ClassName(|)  constructors matched
-   * this(|)                        constructors of current class matched
-   * super(|)                     constructors of super class matched
+  * method(|)                 methods matched
+  * var.method(|)           methods matched
+  * new ClassName(|)  constructors matched
+  * this(|)                        constructors of current class matched
+  * super(|)                     constructors of super class matched
 
 Any place between '(' and ')' will be supported soon.  
 Help information of javadoc is not supported yet.
 
-   (3). after an incomplete word, list all the matched beginning with it.
-    - var.ab|          subset of members of var beginning with `ab`
-    - ab|                list of all maybes
 
-   (4). import statement
-    - " import         java.util.|"
-    - " import         java.ut|"
-    - " import         ja|"
-    - " import         java.lang.Character.|"        e.g. "Subset"
-    - " import static java.lang.Math.|"        e.g. "PI, abs"
+### after an incomplete word, list all the matched beginning with it.
 
-   (5). package declaration
-    - " package         com.|"
+  * var.ab|          subset of members of var beginning with `ab`
+  * ab|                list of all maybes
 
-   The above are in simple expression.
-   (6). after compound expression:
-    - PrimaryExpr.var.|
-    - PrimaryExpr.method().|
-    - PrimaryExpr.method(|)
-    - PrimaryExpr.var.ab|
-    e.g.
-    - "java.lang        . System.in .|"
-    - "java.lang.System.getenv().|"
-    - "int.class.toString().|"
-    - "list.toArray().|"
-    - "new ZipFile(path).|"
-    - "new ZipFile(path).entries().|"
 
-   (7). Nested expression:
-    - "System.out.println( str.| )"
-    - "System.out.println(str.charAt(| )"
-    - "for (int i = 0; i < str.|; i++)"
-    - "for ( Object o : a.getCollect| )"
+### import statement
+
+  * " import         java.util.|"
+  * " import         java.ut|"
+  * " import         ja|"
+  * " import         java.lang.Character.|"        e.g. "Subset"
+  * " import static java.lang.Math.|"        e.g. "PI, abs"
+
+
+### package declaration
+
+   * " package         com.|"
+
+The above are in simple expression.
+
+
+### after compound expression:
+
+  * PrimaryExpr.var.|
+  * PrimaryExpr.method().|
+  * PrimaryExpr.method(|)
+  * PrimaryExpr.var.ab|
+   e.g.
+  * "java.lang        . System.in .|"
+  * "java.lang.System.getenv().|"
+  * "int.class.toString().|"
+  * "list.toArray().|"
+  * "new ZipFile(path).|"
+  * "new ZipFile(path).entries().|"
+
+
+### Nested expression:
+
+  * "System.out.println( str.| )"
+  * "System.out.println(str.charAt(| )"
+  * "for (int i = 0; i < str.|; i++)"
+  * "for ( Object o : a.getCollect| )"
 
 
 ## <a name="limits"></a>Limitations
@@ -123,12 +134,12 @@ The embedded parser works a bit slower than expected.
 
 ## <a name="todos"></a>TODOs
 
--  Improve performance of the embedded parser. Incremental parser.
--  Add quick information using balloonexpr, ballooneval, balloondelay.
--  Add javadoc
--  Give a hint for class name conflict in different packages.
--  Support parameter information for template
--  Make it faster and more robust.
+  - Improve performance of the embedded parser. Incremental parser.
+  - Add quick information using balloonexpr, ballooneval, balloondelay.
+  - Add javadoc
+  - Give a hint for class name conflict in different packages.
+  - Support parameter information for template
+  - Make it faster and more robust.
 
 
 ## <a name="credits"></a>Credits
