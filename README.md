@@ -1,7 +1,6 @@
-[![Build Status](https://travis-ci.com/sixro/javacomplete.svg?branch=master)](https://travis-ci.com/sixro/javacomplete)
-
 # vim-javacomplete
 > This is javacomplete, an omni-completion script of JAVA language for vim.
+[![Build Status](https://travis-ci.com/sixro/javacomplete.svg?branch=master)](https://travis-ci.com/sixro/javacomplete)
 
 This is a fork of the [mirror](https://github.com/vim-scripts/javacomplete) of http://www.vim.org/scripts/script.php?script_id=1785
 
