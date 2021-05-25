@@ -2209,7 +2209,9 @@ endfu
 " precondition: 
 " NOTE: call expand() to convert path to standard form
 fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
+	call s:Trace('[s:DoGetTypeInfoForFQN] Retrieving type info for FQNs [' . join(a:fqns, ', ') . '] searching into ' . a:srcpath . ' (additional params: ' . join(a:000, ', ') . ') ...')
 	if empty(a:fqns) || empty(a:srcpath)
+		call s:Trace('[s:DoGetTypeInfoForFQN] ... both params are required. Returning nothing')
 		return
 	endif
 
@@ -2303,16 +2305,19 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
 		endfor
 	endif
 
-
-	call s:Info('FQN1&2: ' . string(keys(files)))
+	call s:Info('[s:DoGetTypeInfoForFQN] ... FQN1&2 are: ' . string(keys(files)))
 	for fqn in keys(files)
+		call s:Debug('[s:DoGetTypeInfoForFQN] ... processing FQN "' . fqn . '" ...')
 		if !has_key(s:cache, fqn) || get(get(s:files, files[fqn], {}), 'modifiedtime', 0) != getftime(files[fqn])
 			let ti = s:GetClassInfoFromSource(fqn[strridx(fqn, '.')+1:], files[fqn])
 			if !empty(ti)
 				let s:cache[fqn] = s:Sort(ti)
+				call s:Info('[s:DoGetTypeInfoForFQN] ... s:cache for FQN "' . fqn . ' valued to ' . string(s:cache[fqn]))
 			endif
 		endif
+		call s:Debug('[s:DoGetTypeInfoForFQN] ... a:0 = ' . a:0)
 		if (a:0 == 0 || !a:1)
+			call s:Trace('[s:DoGetTypeInfoForFQN] ... OK, completed')
 			return
 		endif
 	endfor
@@ -2322,6 +2327,7 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
 	let commalist = ''
 	for fqn in a:fqns
 		if has_key(s:cache, fqn) && (a:0 == 0 || !a:1)
+			call s:Trace('[s:DoGetTypeInfoForFQN] ... ?!? (2) returning nothing')
 			return
 		else "if stridx(fqn, '.') >= 0
 			let commalist .= fqn . ','
@@ -2342,7 +2348,8 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
 			endfor
 		endif
 	endif
-endfu
+	call s:Trace('[s:DoGetTypeInfoForFQN] ... OK, completed')
+endfunction
 
 " a:1	filepath
 " a:2	package name
@@ -2547,6 +2554,7 @@ function! s:DoGetReflectionClassInfo(fqn)
 endfunction
 
 fu! s:GetClassInfoFromSource(class, filename)
+	call s:Trace('[s:GetClassInfoFromSource] Retrieving info of class "' . a:class . '" from source "' . a:filename . '" ...')
 	let ci = {}
 	if len(tagfiles()) > 0
 		let ci = s:DoGetClassInfoFromTags(a:class)
@@ -2559,11 +2567,14 @@ fu! s:GetClassInfoFromSource(class, filename)
 		for t in s:SearchTypeAt(unit, targetPos, 1)
 			if t.name == a:class
 				let t.filepath = a:filename == '%' ? s:GetCurrentFileKey() : expand(a:filename)
-				return s:Tree2ClassInfo(t)
+				let ret = s:Tree2ClassInfo(t)
+				call s:Trace('[s:GetClassInfoFromSource] ... OK, returning ' . string(ret))
+				return ret
 				"return s:AddInheritedClassInfo(s:Tree2ClassInfo(t), t)
 			endif
 		endfor
 	endif
+	call s:Trace('[s:GetClassInfoFromSource] ... OK, returning ' . string(ci))
 	return ci
 endfu
 
