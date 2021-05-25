@@ -2312,7 +2312,7 @@ fu! s:DoGetTypeInfoForFQN(fqns, srcpath, ...)
 			let ti = s:GetClassInfoFromSource(fqn[strridx(fqn, '.')+1:], files[fqn])
 			if !empty(ti)
 				let s:cache[fqn] = s:Sort(ti)
-				call s:Info('[s:DoGetTypeInfoForFQN] ... s:cache for FQN "' . fqn . ' valued to ' . string(s:cache[fqn]))
+				call s:Info('[s:DoGetTypeInfoForFQN] ... s:cache for FQN "' . fqn . '" valued to ' . string(s:cache[fqn]))
 			endif
 		endif
 		call s:Debug('[s:DoGetTypeInfoForFQN] ... a:0 = ' . a:0)
@@ -2357,14 +2357,14 @@ fu! s:DoGetClassInfo(class, ...)
 	call s:Trace('[s:DoGetClassInfo] Retrieving info on class "' . a:class . '" (additional params: ' . join(a:000, ', ') . ') ...')
 	if has_key(s:cache, a:class)
 		let ret = s:cache[a:class]
-		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+		call s:Trace('[s:DoGetClassInfo] ... (1) returning ' . string(ret))
 		return ret
 	endif
 
 	" array type:	TypeName[] or '[I' or '[[Ljava.lang.String;'
 	if a:class[-1:] == ']' || a:class[0] == '['
 		let ret = s:ARRAY_TYPE_INFO
-		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+		call s:Trace('[s:DoGetClassInfo] ... (2) returning ' . string(ret))
 		return ret
 	endif
 
@@ -2377,7 +2377,7 @@ fu! s:DoGetClassInfo(class, ...)
 				"	search methods defined in other jsp files included
 				"	avoid including self directly or indirectly
 			endif
-			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci)))
+			call s:Trace('[s:DoGetClassInfo] ... (3) returning ' . string(ci)))
 			return ci
 		endif
 
@@ -2392,7 +2392,7 @@ fu! s:DoGetClassInfo(class, ...)
 			" What will be returned for this?
 			" - besides the above, all fields and methods of current class. No ctors.
 			let ret = s:Sort(s:Tree2ClassInfo(t))
-			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			call s:Trace('[s:DoGetClassInfo] ... (4) returning ' . string(ret))
 			return ret
 			"return s:Sort(s:AddInheritedClassInfo(a:class == 'this' ? s:Tree2ClassInfo(t) : {}, t, 1))
 		endif
@@ -2424,9 +2424,10 @@ fu! s:DoGetClassInfo(class, ...)
 	if len(names) > 1
 		call s:DoGetTypeInfoForFQN([typename], srcpath)
 		let ci = get(s:cache, typename, {})
+		call s:Debug('[s:DoGetClassInfo] ... ci = ' . ci)
 		if get(ci, 'tag', '') == 'CLASSDEF'
 			let ret = s:cache[typename]
-			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			call s:Trace('[s:DoGetClassInfo] ... (5) returning ' . string(ret))
 			return ret
 		elseif get(ci, 'tag', '') == 'PACKAGE'
 			call s:Trace('[s:DoGetClassInfo] ... ?!? returning empty')
@@ -2451,14 +2452,14 @@ fu! s:DoGetClassInfo(class, ...)
 			let ci = s:GetClassInfoFromSource(simplename, '%')
 			" do not cache it
 			if !empty(ci)
-				call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci))
+				call s:Trace('[s:DoGetClassInfo] ... (6) returning ' . string(ci))
 				return ci
 			endif
 		endif
 	else
 		let ci = s:GetClassInfoFromSource(typename, filekey)
 		if !empty(ci)
-			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci))
+			call s:Trace('[s:DoGetClassInfo] ... (7) returning ' . string(ci))
 			return ci
 		endif
 	endif
@@ -2473,7 +2474,7 @@ fu! s:DoGetClassInfo(class, ...)
 		if get(ti, 'tag', '') != 'CLASSDEF'
 			" TODO: mark the wrong import declaration.
 		endif
-		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ti))
+		call s:Trace('[s:DoGetClassInfo] ... (8) returning ' . string(ti))
 		return ti
 	endif
 
@@ -2487,8 +2488,9 @@ fu! s:DoGetClassInfo(class, ...)
 	call s:DoGetTypeInfoForFQN(fqns, srcpath)
 	for fqn in fqns
 		if has_key(s:cache, fqn)
+			call s:Debug('[s:DoGetClassInfo] ... get: ' .  get(s:cache[fqn], 'tag', ''))
 			let ret = get(s:cache[fqn], 'tag', '') == 'CLASSDEF' ? s:cache[fqn] : {}
-			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			call s:Trace('[s:DoGetClassInfo] ... (9) returning ' . string(ret))
 			return ret
 		endif
 	endfor
@@ -2561,7 +2563,7 @@ fu! s:GetClassInfoFromSource(class, filename)
 	endif
 
 	if empty(ci)
-		call s:Info('Use java_parser.vim to generate class information')
+		call s:Info('[s:GetClassInfoFromSource] ... unable to find class info from tags, using java_parser.vim to generate them...')
 		let unit = javacomplete#parse(a:filename)
 		let targetPos = a:filename == '%' ? java_parser#MakePos(line('.')-1, col('.')-1) : -1
 		for t in s:SearchTypeAt(unit, targetPos, 1)
@@ -2646,6 +2648,7 @@ endfu
 " To obtain information of the class in current file or current folder, or
 " even in current project.
 function! s:DoGetClassInfoFromTags(class)
+	call s:Trace('[s:DoGetClassInfoFromTags] Retrieving info of class "' . a:class . '" from tags ...')
 	" find tag of a:class declaration
 	let tags = taglist('^' . a:class)
 	let filename = ''
@@ -2710,6 +2713,7 @@ function! s:DoGetClassInfoFromTags(class)
 			call add(ci['fields'], member)
 		endif
 	endfor
+	call s:Trace('[s:DoGetClassInfoFromTags] ... OK, returning ' . string(ci))
 	return ci
 endfu
 
