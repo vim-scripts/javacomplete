@@ -2651,6 +2651,7 @@ function! s:DoGetClassInfoFromTags(class)
 	call s:Trace('[s:DoGetClassInfoFromTags] Retrieving info of class "' . a:class . '" from tags ...')
 	" find tag of a:class declaration
 	let tags = taglist('^' . a:class)
+	call s:Debug('[s:DoGetClassInfoFromTags] ... tags = ' . join(tags, ', '))
 	let filename = ''
 	let cmd = ''
 	for tag in tags
@@ -2663,7 +2664,11 @@ function! s:DoGetClassInfoFromTags(class)
 		endif
 	endfor
 
+	call s:Debug('[s:DoGetClassInfoFromTags] ... filename = ' . filename)
+	call s:Debug('[s:DoGetClassInfoFromTags] ... cmd = ' . cmd)
+	call s:Debug('[s:DoGetClassInfoFromTags] ... b:incomplete = "' . b:incomplete . '"')
 	let tags = taglist('^' . (empty(b:incomplete) ? '.*' : b:incomplete) )
+	call s:Debug('[s:DoGetClassInfoFromTags] ... tags (2) = ' . join(tags, ', '))
 	if filename != ''
 		call filter(tags, "v:val['filename'] == '" . filename . "' && has_key(v:val, 'class') ? v:val['class'] == '" . a:class . "' : 1")
 	endif
