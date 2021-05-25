@@ -2558,9 +2558,19 @@ endfunction
 fu! s:GetClassInfoFromSource(class, filename)
 	call s:Trace('[s:GetClassInfoFromSource] Retrieving info of class "' . a:class . '" from source "' . a:filename . '" ...')
 	let ci = {}
-	if len(tagfiles()) > 0
-		let ci = s:DoGetClassInfoFromTags(a:class)
-	endif
+	" FIXME sixro: I am pretty sure that the code that tries to retrieve data
+	" from tags is bugged. Trying to comment it checking the behaviour of
+	" the java parser...
+	" CONFIRMED! using tags the structure is:
+	" {'fields': [], 'name': 'LoggedIn', 'methods': [{'p': '', 'r': '', 'd': 'public void ensure()', 'm': '', 'n': 'ensure'}, {'p': '', 'r': '', 'd': 'void ensure();', 'm': '', 'n': 'ensure'}, {'p': '', 'r': '', 'd': 'void enter();', 'm': '', 'n': 'enter'}, {'p': '', 'r': '', 'd': 'public void enter()', 'm': '', 'n': 'enter'}, {'p': '', 'r': '', 'd': 'public void enter()', 'm': '', 'n': 'enter'}, {'p': '', 'r': '', 'd': '@Test public void enter()', 'm': '', 'n': 'enter'}], 'ctors': []}
+	" while from Java Parser it is:
+	" {'tag': 'CLASSDEF', 'filepath': '/mnt/c/Users/rober/Development/brokko/src/main/java/com/github/sixro/brokko/finecobank/LoggedIn.java', 'defs': [{'tag': 'METHODDEF', 'r': 'void', 'd': 'void ensure();', 'name': 'ensure', 'params': [], 'n': 'ensure', 'pos': 258, 'm': 0}, {'tag': 'BLOCK', 'stats': [], 'endpos': -1, 'pos': -1}], 'ctors': [], 'name': 'LoggedIn', 'classes': [], 'mods': {'tag': 'MODIFIERS', 'flags': 512, 'annotations': [], 'pos': 185}, 'methods': [{'tag': 'METHODDEF', 'r': 'void', 'd': 'void ensure();', 'name': 'ensure', 'params': [], 'n': 'ensure', 'pos': 258, 'm': 0}], 'endpos': 276, 'fields': [], 'typarams': [], 'pos': 185, 'fqn': 'com.github.sixro.brokko.finecobank.LoggedIn'}
+	" and the code is searching for an element having 'tag' equals to
+	" 'CLASSDEF' that as you can see exists only in the dictionary returned by
+	" Java Parser!
+	"if len(tagfiles()) > 0
+	"	let ci = s:DoGetClassInfoFromTags(a:class)
+	"endif
 
 	if empty(ci)
 		call s:Info('[s:GetClassInfoFromSource] ... unable to find class info from tags, using java_parser.vim to generate them...')
@@ -2656,6 +2666,9 @@ function! s:DoGetClassInfoFromTags(class)
 	let cmd = ''
 	for tag in tags
 		if has_key(tag, 'kind')
+			" TODO sixro: here it checks only for classes but the kind could
+			" be also 'i' for interfaces. Don't we need to setup filenames in
+			" this case?
 			if tag['kind'] == 'c'
 				let filename = tag['filename']
 				let cmd = tag['cmd']
