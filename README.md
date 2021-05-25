@@ -43,37 +43,43 @@ existed
 It recognize nearly all kinds of Primary Expressions (see langspec-3.0)
 except for "Primary.new Indentifier". Casting conversion is also supported.
 Samples of input contexts are as following:	('|' indicates cursor)
-    (1). after '.', list members of a class or a package
-    - package.|         subpackages and classes of a package
-    - Type.|                static members of the 'Type' class and "class"
-    - var.| or field.|     members of a variable or a field
-    - method().|         members of result of method()
-    - this.|                   members of the current class
-    - ClassName.this.|  members of the qualified class
-    - super.|               members of the super class
-    - array.|                members of an array object
-    - array[i].|             array access, return members of the element of array
-    - "String".|            String literal, return members of java.lang.String
-    - int.| or void.|       primitive type or pseudo-type, return "class"
-    - int[].|                   array type, return members of a array type and "class"
-    - java.lang.String[].|
-    - new int[].|           members of the new array instance
-    - new java.lang.String[i=1][].|
-    - new Type().|      members of the new class instance 
-    - Type.class.|      class literal, return members of java.lang.Class
-    - void.class.| or int.class.|
-    - ((Type)var).|         cast var as Type, return members of Type.
-    - (var.method()).|   same with "var.|"
-    - (new Class()).|    same with "new Class().|"
 
-   (2). after '(', list matching methods with parameters information.
-    - method(|)                 methods matched
-    - var.method(|)           methods matched
-    - new ClassName(|)  constructors matched
-    - this(|)                        constructors of current class matched
-    - super(|)                     constructors of super class matched
-    Any place between '(' and ')' will be supported soon.
-    Help information of javadoc is not supported yet.
+
+### after '.', list members of a class or a package
+
+   * package.|         subpackages and classes of a package
+   * Type.|                static members of the 'Type' class and "class"
+   * var.| or field.|     members of a variable or a field
+   * method().|         members of result of method()
+   * this.|                   members of the current class
+   * ClassName.this.|  members of the qualified class
+   * super.|               members of the super class
+   * array.|                members of an array object
+   * array[i].|             array access, return members of the element of array
+   * "String".|            String literal, return members of java.lang.String
+   * int.| or void.|       primitive type or pseudo-type, return "class"
+   * int[].|                   array type, return members of a array type and "class"
+   * java.lang.String[].|
+   * new int[].|           members of the new array instance
+   * new java.lang.String[i=1][].|
+   * new Type().|      members of the new class instance 
+   * Type.class.|      class literal, return members of java.lang.Class
+   * void.class.| or int.class.|
+   * ((Type)var).|         cast var as Type, return members of Type.
+   * (var.method()).|   same with "var.|"
+   * (new Class()).|    same with "new Class().|"
+
+
+### after '(', list matching methods with parameters information.
+
+   * method(|)                 methods matched
+   * var.method(|)           methods matched
+   * new ClassName(|)  constructors matched
+   * this(|)                        constructors of current class matched
+   * super(|)                     constructors of super class matched
+
+Any place between '(' and ')' will be supported soon.  
+Help information of javadoc is not supported yet.
 
    (3). after an incomplete word, list all the matched beginning with it.
     - var.ab|          subset of members of var beginning with `ab`
