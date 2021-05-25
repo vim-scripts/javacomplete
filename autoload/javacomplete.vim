@@ -289,6 +289,7 @@ endfunction
 " Precondition:	incomplete must be a word without '.'.
 " return all the matched, variables, fields, methods, types, packages
 fu! s:CompleteAfterWord(incomplete)
+	call s:Trace('[s:CompleteAfterWord] Completing imcomplete word \"' . a:incomplete . '\" ...')
 	" packages in jar files
 	if !exists('s:all_packages_in_jars_loaded')
 		call s:DoGetInfoByReflection('-', '-P')
@@ -371,6 +372,7 @@ fu! s:CompleteAfterWord(incomplete)
 	let result += sort(pkgs)
 	let result += sort(types)
 
+	call s:Trace('[s:CompleteAfterWord] ... OK, returning: ' . join(result, ', '))
 	return result
 endfu
 
@@ -2133,8 +2135,11 @@ endfu
 
 fu! s:Log(level, key, ...)
 	if a:level >= javacomplete#GetLogLevel()
-		echo a:key
-		call add(s:log, a:key)
+		" TODO allow log directory to be configured
+		let s:logFilepath = "/tmp/vim-javacomplete_" . strftime("%Y-%m-%d") . ".log"
+		let s:timestamp = strftime("%H:%M:%S")
+		let s:logline = s:timestamp . " [" . a:level . "] " . a:key . " " . join(a:000, " ")
+		call writefile([ s:logline ], s:logFilepath, "a")
 	endif
 endfu
 
