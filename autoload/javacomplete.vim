@@ -220,14 +220,11 @@ function! javacomplete#Complete(findstart, base)
 		return -1
 	endif
 
-
 	" Return list of matches.
-
 	call s:WatchVariant('b:context_type: "' . b:context_type . '"  b:incomplete: "' . b:incomplete . '"  b:dotexpr: "' . b:dotexpr . '"')
 	if b:dotexpr =~ '^\s*$' && b:incomplete =~ '^\s*$'
 		return []
 	endif
-
 
 	let result = []
 	if b:dotexpr !~ '^\s*$'
@@ -473,7 +470,7 @@ function! s:CompleteAfterDot(expr)
 			else
 				" 3)
 				let typename = s:GetDeclaredClassName(ident)
-				call s:Info('F3. "' . ident . '.|"  typename: "' . typename . '"')
+				call s:Info('F3. Detected "variable" scenario where the identifier is "' . ident . '.|" and his typename is "' . typename . '"')
 				if (typename != '')
 					if typename[0] == '[' || typename[-1:] == ']'
 						let ti = s:ARRAY_TYPE_INFO
@@ -2350,13 +2347,18 @@ endfu
 " a:1	filepath
 " a:2	package name
 fu! s:DoGetClassInfo(class, ...)
+	call s:Trace('[s:DoGetClassInfo] Retrieving info on class "' . a:class . '" (additional params: ' . join(a:000, ', ') . ') ...')
 	if has_key(s:cache, a:class)
-		return s:cache[a:class]
+		let ret = s:cache[a:class]
+		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+		return ret
 	endif
 
 	" array type:	TypeName[] or '[I' or '[[Ljava.lang.String;'
 	if a:class[-1:] == ']' || a:class[0] == '['
-		return s:ARRAY_TYPE_INFO
+		let ret = s:ARRAY_TYPE_INFO
+		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+		return ret
 	endif
 
 	" either this or super is not qualified
@@ -2368,6 +2370,7 @@ fu! s:DoGetClassInfo(class, ...)
 				"	search methods defined in other jsp files included
 				"	avoid including self directly or indirectly
 			endif
+			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci)))
 			return ci
 		endif
 
@@ -2381,7 +2384,9 @@ fu! s:DoGetClassInfo(class, ...)
 			" - the methods of the Object class.
 			" What will be returned for this?
 			" - besides the above, all fields and methods of current class. No ctors.
-			return s:Sort(s:Tree2ClassInfo(t))
+			let ret = s:Sort(s:Tree2ClassInfo(t))
+			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			return ret
 			"return s:Sort(s:AddInheritedClassInfo(a:class == 'this' ? s:Tree2ClassInfo(t) : {}, t, 1))
 		endif
 
@@ -2390,6 +2395,7 @@ fu! s:DoGetClassInfo(class, ...)
 
 
 	if a:class !~ '^\s*' . s:RE_QUALID . '\s*$' || s:HasKeyword(a:class)
+		call s:Trace('[s:DoGetClassInfo] ... ?!? returning empty')
 		return {}
 	endif
 
@@ -2412,8 +2418,11 @@ fu! s:DoGetClassInfo(class, ...)
 		call s:DoGetTypeInfoForFQN([typename], srcpath)
 		let ci = get(s:cache, typename, {})
 		if get(ci, 'tag', '') == 'CLASSDEF'
-			return s:cache[typename]
+			let ret = s:cache[typename]
+			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			return ret
 		elseif get(ci, 'tag', '') == 'PACKAGE'
+			call s:Trace('[s:DoGetClassInfo] ... ?!? returning empty')
 			return {}
 		endif
 	endif
@@ -2435,12 +2444,14 @@ fu! s:DoGetClassInfo(class, ...)
 			let ci = s:GetClassInfoFromSource(simplename, '%')
 			" do not cache it
 			if !empty(ci)
+				call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci))
 				return ci
 			endif
 		endif
 	else
 		let ci = s:GetClassInfoFromSource(typename, filekey)
 		if !empty(ci)
+			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ci))
 			return ci
 		endif
 	endif
@@ -2455,6 +2466,7 @@ fu! s:DoGetClassInfo(class, ...)
 		if get(ti, 'tag', '') != 'CLASSDEF'
 			" TODO: mark the wrong import declaration.
 		endif
+		call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ti))
 		return ti
 	endif
 
@@ -2468,10 +2480,13 @@ fu! s:DoGetClassInfo(class, ...)
 	call s:DoGetTypeInfoForFQN(fqns, srcpath)
 	for fqn in fqns
 		if has_key(s:cache, fqn)
-			return get(s:cache[fqn], 'tag', '') == 'CLASSDEF' ? s:cache[fqn] : {}
+			let ret = get(s:cache[fqn], 'tag', '') == 'CLASSDEF' ? s:cache[fqn] : {}
+			call s:Trace('[s:DoGetClassInfo] ... returning ' . string(ret))
+			return ret
 		endif
 	endfor
 
+	call s:Trace('[s:DoGetClassInfo] ... KO, returning empty')
 	return {}
 endfu
 
