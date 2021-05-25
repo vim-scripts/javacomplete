@@ -139,6 +139,7 @@ The only changes I made are:
   * Disabled the collection of data from `tags` because it is really bugged: in a sense that it collects data from tags and then it expects a format that is absolutely not matching with the content returned by that function
   * Added [vim-vspec](https://github.com/kana/vim-vspec) in order to add tests so that the changing it would not break everything
 
+
 ## <a name="limits"></a>Limitations
 
 The embedded parser works a bit slower than expected.
