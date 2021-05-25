@@ -2769,10 +2769,13 @@ endfu
 " protected for this or super 
 " private for this            
 fu! s:CanAccess(mods, kind)
-	return (a:mods[-4:-4] || a:kind/10 == 0)
+	call s:Trace('[s:CanAccess] Checking access for mods ' . a:mods . ' and kind ' . a:kind . '...')
+	let ret = (a:mods[-4:-4] || a:kind/10 == 0)
 				\ &&   (a:kind == 1 || a:mods[-1:]
 				\	|| (a:mods[-3:-3] && (a:kind == 1 || a:kind == 2))
 				\	|| (a:mods[-2:-2] && a:kind == 1))
+	call s:Trace('[s:CanAccess] ... returning: ' . ret)
+	return ret
 endfu
 
 fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
@@ -2789,8 +2792,16 @@ fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
 		endfor
 
 		for m in (a:0 > 0 && a:1 ? [] : get(a:ci, 'methods', [])) + ((a:kind == 1 || a:kind == 2) ? get(a:ci, 'declared_methods', []) : [])
-			call s:Trace('[s:SearchMember] ... checking method ' . string(m) . '...')
+			call s:Debug('[s:SearchMember] ... checking method ' . string(m) . '...')
+			call s:Debug('[s:SearchMember] ... a:name = ' . a:name . ', m.n = ' . m.n)
 			if empty(a:name) || (a:fullmatch ? m.n ==# a:name : m.n =~# '^' . a:name)
+				" FIXME sixro: here there is a bug for sure.
+				" Indeed in a completion after dot e.g. MyObject.en (where en
+				" is for a method named ensure) it doesn't collect any member
+				" if the object is an interface
+				" Unfortunately, commenting this has a site effect of creating
+				" a huge amount of methods for example for String class,
+				" because it collects also methods that cannot be accessed
 				if s:CanAccess(m.m, a:kind)
 					call add(result[1], m)
 				endif
