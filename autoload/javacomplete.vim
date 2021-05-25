@@ -380,8 +380,10 @@ endfu
 " Precondition:	expr must end with '.'
 " return members of the value of expression
 function! s:CompleteAfterDot(expr)
+	call s:Trace('[s:CompleteAfterDot] Completing after dot expression "' . a:expr . '"...')
 	let items = s:ParseExpr(a:expr)		" TODO: return a dict containing more than items
 	if empty(items)
+		call s:Trace('[s:CompleteAfterDot] ... KO, unable to find any. Returning empty')
 		return []
 	endif
 
@@ -389,7 +391,9 @@ function! s:CompleteAfterDot(expr)
 	" 0. String literal
 	call s:Info('P0. "str".|')
 	if items[-1] =~  '"$'
-		return s:GetMemberList("java.lang.String")
+		let ret = s:GetMemberList("java.lang.String")
+		call s:Trace('[s:CompleteAfterDot] ... returning: ' . join(ret, ', '))
+		return ret
 	endif
 
 
@@ -397,9 +401,7 @@ function! s:CompleteAfterDot(expr)
 	let ii = 1		" item index
 	let itemkind = 0
 
-	"
 	" optimized process
-	"
 	" search the longest expr consisting of ident
 	let i = 1
 	let k = i
@@ -409,6 +411,7 @@ function! s:CompleteAfterDot(expr)
 			let k = i
 			" return when found other keywords
 		elseif s:IsKeyword(ident)
+			call s:Trace('[s:CompleteAfterDot] ... ?!? returning empty')
 			return []
 		endif
 		let items[i] = substitute(items[i], '\s', '', 'g')
@@ -424,6 +427,7 @@ function! s:CompleteAfterDot(expr)
 				let itemkind = items[k] ==# 'this' ? 1 : items[k] ==# 'super' ? 2 : 0
 				let ii = k+1
 			else
+				call s:Trace('[s:CompleteAfterDot] ... ?!? returning empty')
 				return []
 			endif
 
@@ -441,10 +445,7 @@ function! s:CompleteAfterDot(expr)
 		endif
 	endif
 
-
-	"
 	" first item
-	"
 	if empty(ti)
 		" cases:
 		" 1) "int.|", "void.|"	- primitive type or pseudo-type, return `class`
@@ -526,6 +527,7 @@ function! s:CompleteAfterDot(expr)
 				if get(ti, 'flags', '')[-10:-10] || get(ti, 'flags', '')[-11:-11]
 					echo 'cannot instantiate the type ' . subs[0]
 					let ti = {}
+					call s:Info('[s:CompleteAfterDot] ... KO, unable to instantiate type ' . subs[0] . '. Returning empty')
 					return []
 				endif
 			endif
@@ -638,6 +640,7 @@ function! s:CompleteAfterDot(expr)
 			endif
 		endif
 
+		call s:Trace('[s:CompleteAfterDot] ... ?!? returning empty')
 		return []
 	endwhile
 
@@ -647,21 +650,31 @@ function! s:CompleteAfterDot(expr)
 		if type(ti) == type({})
 			if get(ti, 'tag', '') == 'CLASSDEF'
 				if get(ti, 'name', '') == '!'
-					return [{'kind': 'f', 'word': 'class', 'menu': 'Class'}]
+					let ret = [{'kind': 'f', 'word': 'class', 'menu': 'Class'}]
+					call s:Trace('[s:CompleteAfterDot] ... returning: ' . join(ret, ', '))
+					return ret
 				elseif get(ti, 'name', '') == '['
-					return s:ARRAY_TYPE_MEMBERS
+					let ret = s:ARRAY_TYPE_MEMBERS
+					call s:Trace('[s:CompleteAfterDot] ... returning: ' . join(ret, ', '))
+					return ret
 				elseif itemkind < 20
-					return s:DoGetMemberList(ti, itemkind)
+					let ret = s:DoGetMemberList(ti, itemkind)
+					call s:Trace('[s:CompleteAfterDot] ... returning: ' . join(ret, ', '))
+					return ret
 				endif
 			elseif get(ti, 'tag', '') == 'PACKAGE'
 				" TODO: ti -> members, in addition to packages in dirs
-				return s:GetMembers( substitute(join(items, '.'), '\s', '', 'g') )
+				let ret = s:GetMembers( substitute(join(items, '.'), '\s', '', 'g') )
+				call s:Trace('[s:CompleteAfterDot] ... returning: ' . join(ret, ', '))
+				return ret
 			endif
 		elseif type(ti) == type([])
+			call s:Trace('[s:CompleteAfterDot] ... returning: ' . ti)
 			return ti
 		endif
 	endif
 
+	call s:Trace('[s:CompleteAfterDot] ... KO, unable to find any match. Returning empty')
 	return []
 endfunction
 
@@ -1326,8 +1339,9 @@ endfunction
 " Parser.GetType() in insenvim
 function! s:GetDeclaredClassName(var)
 	let var = s:Trim(a:var)
-	call s:Trace('GetDeclaredClassName for "' . var . '"')
+	call s:Trace('[s:GetDeclaredClassName] Retrieving declared class name for "' . var . '" ...')
 	if var =~# '^\(this\|super\)$'
+		call s:Trace('[s:GetDeclaredClassName] ... returning "' . var . '"')
 		return var
 	endif
 
@@ -1335,14 +1349,18 @@ function! s:GetDeclaredClassName(var)
 	" Special handling for builtin objects in JSP
 	if &ft == 'jsp'
 		if get(s:JSP_BUILTIN_OBJECTS, a:var, '') != ''
-			return s:JSP_BUILTIN_OBJECTS[a:var]
+			let ret = s:JSP_BUILTIN_OBJECTS[a:var]
+			call s:Trace('[s:GetDeclaredClassName] ...  OK, returning "' . ret . '"')
+			return ret
 		endif
 	endif
 
 	" use java_parser.vim
 	if javacomplete#GetSearchdeclMethod() == 4
 		let variable = get(s:SearchForName(var, 1, 1)[2], -1, {})
-		return get(variable, 'tag', '') == 'VARDEF' ? java_parser#type2Str(variable.vartype) : get(variable, 't', '')
+		let ret = get(variable, 'tag', '') == 'VARDEF' ? java_parser#type2Str(variable.vartype) : get(variable, 't', '')
+		call s:Trace('[s:GetDeclaredClassName] ...  OK, returning "' . ret . '"')
+		return ret
 	endif
 
 
@@ -1365,12 +1383,13 @@ function! s:GetDeclaredClassName(var)
 		call s:Info('class: "' . class . '" declaration: "' . declaration . '" for ' . a:var)
 		let &ignorecase = ic
 		if class != '' && class !=# a:var && class !=# 'import' && class !=# 'class'
+			call s:Trace('[s:GetDeclaredClassName] ...  OK, returning "' . class . '"')
 			return class
 		endif
 	endif
 
 	let &ignorecase = ic
-	call s:Trace('GetDeclaredClassName: cannot find')
+	call s:Trace('[s:GetDeclaredClassName] ...  KO, unable to find a suitable class. Returning empty')
 	return ''
 endfunction
 
