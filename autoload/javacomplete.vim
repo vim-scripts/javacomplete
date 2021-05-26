@@ -287,6 +287,7 @@ function! javacomplete#Complete(findstart, base)
 		return result
 	endif
 
+	call s:Debug('[javacomplete#Complete] ... b:errormsg = ' . b:errormsg)
 	if strlen(b:errormsg) > 0
 		echoerr 'javacomplete error: ' . b:errormsg
 		let b:errormsg = ''
