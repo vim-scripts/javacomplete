@@ -91,40 +91,39 @@ Help information of javadoc is not supported yet.
 
 ### import statement
 
-  * " import         java.util.<kbd>|</kbd>"
-  * " import         java.ut<kbd>|</kbd>"
-  * " import         ja<kbd>|</kbd>"
-  * " import         java.lang.Character.<kbd>|</kbd>"        e.g. "Subset"
-  * " import static java.lang.Math.<kbd>|</kbd>"        e.g. "PI, abs"
+  * `import         java.util.`<kbd>|</kbd>
+  * `import         java.ut`<kbd>|</kbd>
+  * `import         ja`<kbd>|</kbd>
+  * `import         java.lang.Character.`<kbd>|</kbd>        e.g. `Subset`
+  * `import static java.lang.Math.`<kbd>|</kbd>        e.g. `PI, abs`
 
 
 ### package declaration
 
-   * " package         com.<kbd>|</kbd>"
+   * `package com.`<kbd>|</kbd>
 
 The above are in simple expression.
 
-
 ### after compound expression:
 
-  * PrimaryExpr.var.<kbd>|</kbd>
-  * PrimaryExpr.method().<kbd>|</kbd>
-  * PrimaryExpr.method(<kbd>|</kbd>)
-  * PrimaryExpr.var.ab<kbd>|</kbd>
-  * "java.lang.System.in.<kbd>|</kbd>"
-  * "java.lang.System.getenv().<kbd>|</kbd>"
-  * "int.class.toString().<kbd>|</kbd>"
-  * "list.toArray().<kbd>|</kbd>"
-  * "new ZipFile(path).<kbd>|</kbd>"
-  * "new ZipFile(path).entries().<kbd>|</kbd>"
+  * `PrimaryExpr.var.`<kbd>|</kbd>
+  * `PrimaryExpr.method().`<kbd>|</kbd>
+  * `PrimaryExpr.method(`<kbd>|</kbd>)
+  * `PrimaryExpr.var.ab`<kbd>|</kbd>
+  * `java.lang.System.in.`<kbd>|</kbd>
+  * `java.lang.System.getenv().`<kbd>|</kbd>
+  * `int.class.toString().`<kbd>|</kbd>
+  * `list.toArray().`<kbd>|</kbd>
+  * `new ZipFile(path).`<kbd>|</kbd>
+  * `new ZipFile(path).entries().`<kbd>|</kbd>
 
 
 ### Nested expression:
 
-  * "System.out.println( str.<kbd>|</kbd> )"
-  * "System.out.println(str.charAt(<kbd>|</kbd> )"
-  * "for (int i = 0; i < str.<kbd>|</kbd>; i++)"
-  * "for ( Object o : a.getCollect<kbd>|</kbd> )"
+  * `System.out.println( str.`<kbd>|</kbd>` )`
+  * `System.out.println(str.charAt(`<kbd>|</kbd>` )`
+  * `for (int i = 0; i < str.`<kbd>|</kbd>`; i++)`
+  * `for ( Object o : a.getCollect`<kbd>|</kbd>` )`
 
 
 ## <a name="how-to-contribute"></a>How to contribute
