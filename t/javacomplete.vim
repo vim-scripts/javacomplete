@@ -2,7 +2,6 @@ source t/helpers/setup.vim
 
 describe '<Plug>(javacomplete)'
 	before
-		new
 		setfiletype java
 
 		call javacomplete#SetLogLevel(0)
@@ -14,13 +13,25 @@ describe '<Plug>(javacomplete)'
 		close!
 	end
 
-	it 'variable name'
+	it 'var.ab| : subset of members of var beginning with ab'
 		new
-		call PasteSourceCode('VariableName')
-		write! VariableName.java
-		Expect getline(1) == 'package javacompletetestproject;'
+		call PasteSourceCode('SubsetOfVar')
+		write! SubsetOfVar.java
 
-		normal 9G$
+		normal 7G$
+		Expect CharAtCursor() == 'F'
+
+		normal a
+
+		Expect trim(getline('.')) == 'customer.getFirstName('
+	end
+
+	it 'ab| : list of all maybes'
+		new
+		call PasteSourceCode('ListAllMaybes')
+		write! VariableName.java
+
+		normal 7G$
 		Expect CharAtCursor() == 'u'
 
 		normal a

@@ -85,8 +85,8 @@ Help information of javadoc is not supported yet.
 
 ### after an incomplete word, list all the matched beginning with it.
 
-  * `var.ab`<kbd>|</kbd>          subset of members of var beginning with `ab`
-  * `ab`<kbd>|</kbd>                list of all maybes  [![TEST](https://img.shields.io/badge/x-TEST-brightgreen)](#)
+  * `var.ab`<kbd>|</kbd>  subset of members of var beginning with `ab` [![TEST](https://img.shields.io/badge/x-TEST-brightgreen)](#)
+  * `ab`<kbd>|</kbd>      list of all maybes  [![TEST](https://img.shields.io/badge/x-TEST-brightgreen)](#)
 
 
 ### import statement
