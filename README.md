@@ -68,16 +68,16 @@ Samples of input contexts are as following:	(<kbd>|</kbd> indicates cursor)
   * `void.class.`<kbd>|</kbd> or `int.class.`<kbd>|</kbd>
   * `((Type)var).`<kbd>|</kbd>         cast var as Type, return members of Type.
   * `(var.method()).`<kbd>|</kbd>   same with `var.`<kbd>|</kbd>"
-  * `(new Class()).`<kbd>|</kbd>    same with "new Class().`<kbd>|</kbd>"
+  * `(new Class()).`<kbd>|</kbd>    same with `new Class().`<kbd>|</kbd>"
 
 
 ### after `(`, list matching methods with parameters information.
 
   * `method(`<kbd>|</kbd>)                 methods matched
-  * var.method(<kbd>|</kbd>)           methods matched
-  * new ClassName(<kbd>|</kbd>)  constructors matched
-  * this(<kbd>|</kbd>)                        constructors of current class matched
-  * super(<kbd>|</kbd>)                     constructors of super class matched
+  * `var.method(`<kbd>|</kbd>)           methods matched
+  * `new ClassName(`<kbd>|</kbd>)  constructors matched
+  * `this(`<kbd>|</kbd>)                        constructors of current class matched
+  * `super(`<kbd>|</kbd>)                     constructors of super class matched
 
 Any place between `(` and `)` will be supported soon.  
 Help information of javadoc is not supported yet.
@@ -85,8 +85,8 @@ Help information of javadoc is not supported yet.
 
 ### after an incomplete word, list all the matched beginning with it.
 
-  * var.ab<kbd>|</kbd>          subset of members of var beginning with `ab`
-  * ab<kbd>|</kbd>                list of all maybes
+  * `var.ab`<kbd>|</kbd>          subset of members of var beginning with `ab`
+  * `ab`<kbd>|</kbd>                list of all maybes  [![TEST](https://img.shields.io/badge/x-TEST-brightgreen)](#)
 
 
 ### import statement
