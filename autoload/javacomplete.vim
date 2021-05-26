@@ -355,6 +355,7 @@ fu! s:CompleteAfterWord(incomplete)
 		for dirpath in s:GetSourceDirs(expand('%:p'))
 			let filepatterns .= escape(dirpath, ' \') . '/*.java '
 		endfor
+		call s:Debug('[s:CompleteAfterWord] ... executing vimgrep /\s*' . s:RE_TYPE_DECL . '/jg on filepatterns: "' . filepatterns . '" ...')
 		exe 'vimgrep /\s*' . s:RE_TYPE_DECL . '/jg ' . filepatterns
 		for item in getqflist()
 			if item.text !~ '^\s*\*\s\+'
@@ -1691,6 +1692,7 @@ fu! javacomplete#GetSourcePath(...)
 endfunction
 
 fu! s:GetSourceDirs(filepath, ...)
+	call s:Trace('[s:GetSourceDirs] Retrieving source dirs of filepath "' . a:filepath . '" ...')
 	let dirs = exists('s:sourcepath') ? s:sourcepath : []
 
 	if !empty(a:filepath)
@@ -1710,6 +1712,7 @@ fu! s:GetSourceDirs(filepath, ...)
 			call add(dirs, filepath)
 		endif
 	endif
+	call s:Trace('[s:GetSourceDirs] ... OK, returning dirs: ' . join(dirs, ', '))
 	return dirs
 endfunction
 

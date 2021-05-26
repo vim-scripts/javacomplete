@@ -1,4 +1,6 @@
-*.swp
 .vim-flavor
 Gemfile.lock
 VimFlavor.lock
+
+*.swp
+./*.java
