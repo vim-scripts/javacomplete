@@ -46,86 +46,85 @@ except for "Primary.new Indentifier". Casting conversion is also supported.
 Samples of input contexts are as following:	(<kbd>|</kbd> indicates cursor)
 
 
-### after '.', list members of a class or a package
+### after `.`, list members of a class or a package
 
-  * package.|         subpackages and classes of a package
-  * Type.|                static members of the 'Type' class and "class"
-  * var.| or field.|     members of a variable or a field
-  * method().|         members of result of method()
-  * this.|                   members of the current class
-  * ClassName.this.|  members of the qualified class
-  * super.|               members of the super class
-  * array.|                members of an array object
-  * array[i].|             array access, return members of the element of array
-  * "String".|            String literal, return members of java.lang.String
-  * int.| or void.|       primitive type or pseudo-type, return "class"
-  * int[].|                   array type, return members of a array type and "class"
-  * java.lang.String[].|
-  * new int[].|           members of the new array instance
-  * new java.lang.String[i=1][].|
-  * new Type().|      members of the new class instance 
-  * Type.class.|      class literal, return members of java.lang.Class
-  * void.class.| or int.class.|
-  * ((Type)var).|         cast var as Type, return members of Type.
-  * (var.method()).|   same with "var.|"
-  * (new Class()).|    same with "new Class().|"
+  * `package.`<kbd>|</kbd>         subpackages and classes of a package
+  * Type.<kbd>|</kbd>                static members of the 'Type' class and "class"
+  * var.<kbd>|</kbd> or field.<kbd>|</kbd>     members of a variable or a field
+  * method().<kbd>|</kbd>         members of result of method()
+  * this.<kbd>|</kbd>                   members of the current class
+  * ClassName.this.<kbd>|</kbd>  members of the qualified class
+  * super.<kbd>|</kbd>               members of the super class
+  * array.<kbd>|</kbd>                members of an array object
+  * array[i].<kbd>|</kbd>             array access, return members of the element of array
+  * "String".<kbd>|</kbd>            String literal, return members of java.lang.String
+  * int.<kbd>|</kbd> or void.<kbd>|</kbd>       primitive type or pseudo-type, return "class"
+  * int[].<kbd>|</kbd>                   array type, return members of a array type and "class"
+  * java.lang.String[].<kbd>|</kbd>
+  * new int[].<kbd>|</kbd>           members of the new array instance
+  * new java.lang.String[i=1][].<kbd>|</kbd>
+  * new Type().<kbd>|</kbd>      members of the new class instance 
+  * Type.class.<kbd>|</kbd>      class literal, return members of java.lang.Class
+  * void.class.<kbd>|</kbd> or int.class.<kbd>|</kbd>
+  * ((Type)var).<kbd>|</kbd>         cast var as Type, return members of Type.
+  * (var.method()).<kbd>|</kbd>   same with "var.<kbd>|</kbd>"
+  * (new Class()).<kbd>|</kbd>    same with "new Class().<kbd>|</kbd>"
 
 
-### after '(', list matching methods with parameters information.
+### after `(`, list matching methods with parameters information.
 
-  * method(|)                 methods matched
-  * var.method(|)           methods matched
-  * new ClassName(|)  constructors matched
-  * this(|)                        constructors of current class matched
-  * super(|)                     constructors of super class matched
+  * method(<kbd>|</kbd>)                 methods matched
+  * var.method(<kbd>|</kbd>)           methods matched
+  * new ClassName(<kbd>|</kbd>)  constructors matched
+  * this(<kbd>|</kbd>)                        constructors of current class matched
+  * super(<kbd>|</kbd>)                     constructors of super class matched
 
-Any place between '(' and ')' will be supported soon.  
+Any place between `(` and `)` will be supported soon.  
 Help information of javadoc is not supported yet.
 
 
 ### after an incomplete word, list all the matched beginning with it.
 
-  * var.ab|          subset of members of var beginning with `ab`
-  * ab|                list of all maybes
+  * var.ab<kbd>|</kbd>          subset of members of var beginning with `ab`
+  * ab<kbd>|</kbd>                list of all maybes
 
 
 ### import statement
 
-  * " import         java.util.|"
-  * " import         java.ut|"
-  * " import         ja|"
-  * " import         java.lang.Character.|"        e.g. "Subset"
-  * " import static java.lang.Math.|"        e.g. "PI, abs"
+  * " import         java.util.<kbd>|</kbd>"
+  * " import         java.ut<kbd>|</kbd>"
+  * " import         ja<kbd>|</kbd>"
+  * " import         java.lang.Character.<kbd>|</kbd>"        e.g. "Subset"
+  * " import static java.lang.Math.<kbd>|</kbd>"        e.g. "PI, abs"
 
 
 ### package declaration
 
-   * " package         com.|"
+   * " package         com.<kbd>|</kbd>"
 
 The above are in simple expression.
 
 
 ### after compound expression:
 
-  * PrimaryExpr.var.|
-  * PrimaryExpr.method().|
-  * PrimaryExpr.method(|)
-  * PrimaryExpr.var.ab|
-   e.g.
-  * "java.lang        . System.in .|"
-  * "java.lang.System.getenv().|"
-  * "int.class.toString().|"
-  * "list.toArray().|"
-  * "new ZipFile(path).|"
-  * "new ZipFile(path).entries().|"
+  * PrimaryExpr.var.<kbd>|</kbd>
+  * PrimaryExpr.method().<kbd>|</kbd>
+  * PrimaryExpr.method(<kbd>|</kbd>)
+  * PrimaryExpr.var.ab<kbd>|</kbd>
+  * "java.lang.System.in.<kbd>|</kbd>"
+  * "java.lang.System.getenv().<kbd>|</kbd>"
+  * "int.class.toString().<kbd>|</kbd>"
+  * "list.toArray().<kbd>|</kbd>"
+  * "new ZipFile(path).<kbd>|</kbd>"
+  * "new ZipFile(path).entries().<kbd>|</kbd>"
 
 
 ### Nested expression:
 
-  * "System.out.println( str.| )"
-  * "System.out.println(str.charAt(| )"
-  * "for (int i = 0; i < str.|; i++)"
-  * "for ( Object o : a.getCollect| )"
+  * "System.out.println( str.<kbd>|</kbd> )"
+  * "System.out.println(str.charAt(<kbd>|</kbd> )"
+  * "for (int i = 0; i < str.<kbd>|</kbd>; i++)"
+  * "for ( Object o : a.getCollect<kbd>|</kbd> )"
 
 
 ## <a name="how-to-contribute"></a>How to contribute
