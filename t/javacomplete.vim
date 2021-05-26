@@ -1,6 +1,5 @@
 source t/helpers/setup.vim
 
-j
 describe '<Plug>(javacomplete)'
 	before
 		new
