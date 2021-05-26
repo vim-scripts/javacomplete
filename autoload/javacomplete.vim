@@ -109,10 +109,10 @@ let s:history = {}	"
 
 " This function is used for the 'omnifunc' option.		{{{1
 function! javacomplete#Complete(findstart, base)
+	call s:Trace('[javacomplete#Complete] Proceeding with findstart = ' . a:findstart . ' ...')
 	if a:findstart
 		let s:et_whole = reltime()
 		let start = col('.') - 1
-		let s:log = []
 
 		" reset enviroment
 		let b:dotexpr = ''
@@ -128,6 +128,7 @@ function! javacomplete#Complete(findstart, base)
 				let valid = statement =~ '[")0-9A-Za-z_\]]\s*\.\s*$' && statement !~ '\<\H\w\+\.\s*$' && statement !~ '\<\(abstract\|assert\|break\|case\|catch\|const\|continue\|default\|do\|else\|enum\|extends\|final\|finally\|for\|goto\|if\|implements\|import\|instanceof\|interface\|native\|new\|package\|private\|protected\|public\|return\|static\|strictfp\|switch\|synchronized\|throw\|throws\|transient\|try\|volatile\|while\|true\|false\|null\)\.\s*$'
 			endif
 			if !valid
+				call s:Trace('[javacomplete#Complete] ... (1) not valid. Returning -1')
 				return -1
 			endif
 
@@ -144,12 +145,12 @@ function! javacomplete#Complete(findstart, base)
 					let b:context_type = s:CONTEXT_PACKAGE_DECL
 					let b:dotexpr = substitute(statement, '\s*package\s\+', '', '')
 				endif
-
 				" String literal
 			elseif statement =~  '"\s*\.\s*$'
 				let b:dotexpr = substitute(statement, '\s*\.\s*$', '\.', '')
-				return start - strlen(b:incomplete)
-
+				let ret = start - strlen(b:incomplete)
+				call s:Trace('[javacomplete#Complete] ... (2) returning ' . ret)
+				return ret
 			else
 				" type declaration		NOTE: not supported generic yet.
 				let idx_type = matchend(statement, '^\s*' . s:RE_TYPE_DECL)
@@ -168,9 +169,9 @@ function! javacomplete#Complete(findstart, base)
 			" all cases: " java.ut|" or " java.util.|" or "ja|"
 			let b:incomplete = strpart(b:dotexpr, strridx(b:dotexpr, '.')+1)
 			let b:dotexpr = strpart(b:dotexpr, 0, strridx(b:dotexpr, '.')+1)
-			return start - strlen(b:incomplete)
-
-
+			let ret = start - strlen(b:incomplete)
+			call s:Trace('[javacomplete#Complete] ... (3) returning ' . ret)
+			return ret
 			" method parameters, treat methodname or 'new' as an incomplete word
 		elseif statement =~ '(\s*$'
 			" TODO: Need to exclude method declaration?
@@ -188,7 +189,9 @@ function! javacomplete#Complete(findstart, base)
 				if !s:IsKeyword(str)
 					let b:incomplete = '+'
 					let b:dotexpr = str
-					return start - len(b:dotexpr)
+					let ret = start - len(b:dotexpr)
+					call s:Trace('[javacomplete#Complete] ... (4) returning ' . ret)
+					return ret
 				endif
 
 				" normal method invocations
@@ -201,28 +204,36 @@ function! javacomplete#Complete(findstart, base)
 					if statement == 'this' || statement == 'super' 
 						let b:dotexpr = statement
 						let b:incomplete = '+'
-						return start - len(b:dotexpr)
+						let ret = start - len(b:dotexpr)
+						call s:Trace('[javacomplete#Complete] ... (5) returning ' . ret)
+						return ret
 
 					elseif !s:IsKeyword(statement)
 						let b:incomplete = statement
-						return start - strlen(b:incomplete)
+						let ret = start - strlen(b:incomplete)
+						call s:Trace('[javacomplete#Complete] ... (6) returning ' . ret)
+						return ret
 					endif
 
 					" case: "expr.method(|)"
 				elseif statement[pos-1] == '.' && !s:IsKeyword(strpart(statement, pos))
 					let b:dotexpr = s:ExtractCleanExpr(strpart(statement, 0, pos))
 					let b:incomplete = strpart(statement, pos)
-					return start - strlen(b:incomplete)
+					let ret = start - strlen(b:incomplete)
+					call s:Trace('[javacomplete#Complete] ... (7) returning ' . ret)
+					return ret
 				endif
 			endif
 		endif
 
+		call s:Trace('[javacomplete#Complete] ... (8) returning -1')
 		return -1
 	endif
 
 	" Return list of matches.
 	call s:WatchVariant('b:context_type: "' . b:context_type . '"  b:incomplete: "' . b:incomplete . '"  b:dotexpr: "' . b:dotexpr . '"')
 	if b:dotexpr =~ '^\s*$' && b:incomplete =~ '^\s*$'
+		call s:Trace('[javacomplete#Complete] ... (9) returning empty')
 		return []
 	endif
 
@@ -255,7 +266,6 @@ function! javacomplete#Complete(findstart, base)
 		let b:incomplete = ''
 	endif
 
-
 	if len(result) > 0
 		" filter according to b:incomplete
 		if len(b:incomplete) > 0 && b:incomplete != '+'
@@ -273,7 +283,7 @@ function! javacomplete#Complete(findstart, base)
 			unlet s:padding
 		endif
 
-		call s:Debug('finish completion' . reltimestr(reltime(s:et_whole)) . 's')
+		call s:Trace('[javacomplete#Complete] ... (10) returning [' . join(result, ', ') . '] in ' . reltimestr(reltime(s:et_whole)) . 'sec')
 		return result
 	endif
 
@@ -281,6 +291,7 @@ function! javacomplete#Complete(findstart, base)
 		echoerr 'javacomplete error: ' . b:errormsg
 		let b:errormsg = ''
 	endif
+	call s:Trace('[javacomplete#Complete] ... completed')
 endfunction
 
 " Precondition:	incomplete must be a word without '.'.
@@ -371,7 +382,7 @@ fu! s:CompleteAfterWord(incomplete)
 
 	call s:Trace('[s:CompleteAfterWord] ... OK, returning: ' . join(result, ', '))
 	return result
-endfu
+endfunction
 
 
 " Precondition:	expr must end with '.'
@@ -667,7 +678,7 @@ function! s:CompleteAfterDot(expr)
 				return ret
 			endif
 		elseif type(ti) == type([])
-			call s:Trace('[s:CompleteAfterDot] ... returning: ' . ti)
+			call s:Trace('[s:CompleteAfterDot] ... returning: [' . join(ti, ', ') . ']')
 			return ti
 		endif
 	endif
@@ -698,7 +709,7 @@ fu! s:MethodInvocation(expr, ti, itemkind)
 		return s:ArrayAccess(method.r, a:expr)
 	endif
 	return {}
-endfu
+endfunction
 
 fu! s:ArrayAccess(arraytype, expr)
 	if a:expr =~ s:RE_BRACKETS	| return {} | endif
@@ -721,7 +732,7 @@ fu! s:ArrayAccess(arraytype, expr)
 		endif
 	endif
 	return {}
-endfu
+endfunction
 
 
 " Quick information						{{{1
@@ -767,7 +778,7 @@ fu! javacomplete#CompleteParamsInfo(findstart, base)
 		endif
 		return result
 	endif
-endfu
+endfunction
 
 " scanning and parsing							{{{1
 
@@ -828,7 +839,7 @@ fu! s:MergeLines(lnum, col, lnum_old, col_old)
 	let str = substitute(str, '\([.()]\)[ \t]\+', '\1', 'g')
 	let str = substitute(str, '[ \t]\+\([.()]\)', '\1', 'g')
 	return s:Trim(str) . matchstr(lastline, '\s*$')
-endfu
+endfunction
 
 " Extract a clean expr, removing some non-necessary characters. 
 fu! s:ExtractCleanExpr(expr)
@@ -849,7 +860,7 @@ fu! s:ExtractCleanExpr(expr)
 	let idx = match(strpart(cmd, 0, pos+1), '\<new[ \t\r\n]*$')
 
 	return strpart(cmd, idx != -1 ? idx : pos+1)
-endfu
+endfunction
 
 fu! s:ParseExpr(expr)
 	let items = []
@@ -892,7 +903,7 @@ fu! s:ParseExpr(expr)
 	endif
 
 	return items
-endfu
+endfunction
 
 " Given optional argument, call s:ParseExpr() to parser the nonparentheses expr
 fu! s:ProcessParentheses(expr, ...)
@@ -913,7 +924,7 @@ fu! s:ProcessParentheses(expr, ...)
 		return s:ParseExpr(a:expr)
 	endif
 	return [a:expr]
-endfu
+endfunction
 
 " return {'expr': , 'method': , 'params': }
 fu! s:GetMethodInvocationExpr(expr)
@@ -943,7 +954,7 @@ fu! s:GetMethodInvocationExpr(expr)
 		endif
 	endif
 	return mi
-endfu
+endfunction
 
 " imports							{{{1
 function! s:GenerateImports()
@@ -1014,7 +1025,7 @@ fu! s:GetImports(kind, ...)
 		let s:files[filekey] = props
 	endif
 	return get(props, a:kind, [])
-endfu
+endfunction
 
 " search for name in 
 " return the fqn matched
@@ -1027,7 +1038,7 @@ fu! s:SearchSingleTypeImport(name, fqns)
 		return matches[0]
 	endif
 	return ''
-endfu
+endfunction
 
 " search for name in static imports, return list of members with the same name
 " return [types, methods, fields]
@@ -1079,7 +1090,7 @@ fu! s:SearchStaticImports(name, fullmatch)
 		endif
 	endfor
 	return result
-endfu
+endfunction
 
 
 " search decl							{{{1
@@ -1167,7 +1178,7 @@ function! s:FoundClassDeclaration(type)
 
 	silent call cursor(lnum_old, col_old)
 	return lnum
-endfu
+endfunction
 
 fu! s:FoundClassLocally(type)
 	" current path
@@ -1183,7 +1194,7 @@ fu! s:FoundClassLocally(type)
 	endif
 
 	return 0
-endfu
+endfunction
 
 " regexp samples:
 " echo search('\(\(public\|protected|private\)[ \t\n\r]\+\)\?\(\(static\)[ \t\n\r]\+\)\?\(\<class\>\|\<interface\>\)[ \t\n\r]\+HelloWorld[^a-zA-Z0-9_$]', 'W')
@@ -1327,7 +1338,7 @@ fu! s:SearchForName(name, first, fullmatch)
 		let result[2] += si[2]
 	endif
 	return result
-endfu
+endfunction
 
 " TODO: how to determine overloaded functions
 fu! s:DetermineMethod(methods, parameters)
@@ -1424,7 +1435,7 @@ fu! javacomplete#parse(...)
 	endif
 	let s:files[filename] = props
 	return props.unit
-endfu
+endfunction
 
 " update fqn for toplevel types or nested types. 
 " not for local type or anonymous type
@@ -1441,7 +1452,7 @@ fu! s:UpdateFQN(tree, qn)
 			endif
 		endfor
 	endif
-endfu
+endfunction
 
 " TreeVisitor						{{{2
 fu! s:visitTree(tree, param) dict
@@ -1452,7 +1463,7 @@ fu! s:visitTree(tree, param) dict
 			call self.visit(tree, a:param)
 		endfor
 	endif
-endfu
+endfunction
 
 let s:TreeVisitor = {'visit': function('s:visitTree'),
 	\ 'TOPLEVEL'	: 'call self.visit(a:tree.types, a:param)',
@@ -1487,7 +1498,7 @@ fu! s:SearchTypeAt(tree, targetPos, ...)
 	let result = []
 	call s:TreeVisitor.visit(a:tree, {'result': result, 'pos': a:targetPos, 'allNonLocal': a:0 == 0 ? 0 : 1})
 	return result
-endfu
+endfunction
 
 " a:1		match beginning
 " return	a stack of matching name
@@ -1502,7 +1513,7 @@ fu! s:SearchNameInAST(tree, name, targetPos, fullmatch)
 	call s:TreeVisitor.visit(a:tree, {'result': result, 'pos': a:targetPos, 'name': a:name})
 	"call s:Info(a:name . ' ' . string(result) . ' line: ' . line('.') . ' col: ' . col('.')) . ' ' . a:targetPos
 	return result
-endfu
+endfunction
 
 
 " javacomplete#Searchdecl				{{{2
@@ -1577,26 +1588,26 @@ fu! javacomplete#Searchdecl()
 
 	endif
 	return hint
-endfu
+endfunction
 
 
 " java							{{{1
 
 fu! s:IsBuiltinType(name)
 	return index(s:PRIMITIVE_TYPES, a:name) >= 0
-endfu
+endfunction
 
 fu! s:IsKeyword(name)
 	return index(s:KEYWORDS, a:name) >= 0
-endfu
+endfunction
 
 fu! s:HasKeyword(name)
 	return a:name =~# s:RE_KEYWORDS
-endfu
+endfunction
 
 fu! s:TailOfQN(qn)
 	return a:qn[strridx(a:qn, '.')+1:]
-endfu
+endfunction
 
 " options								{{{1
 " Methods to search declaration						{{{2
@@ -1608,37 +1619,37 @@ fu! javacomplete#GetSearchdeclMethod()
 		return 1
 	endif
 	return exists('s:searchdecl') ? s:searchdecl : 4
-endfu
+endfunction
 
 fu! javacomplete#SetSearchdeclMethod(method)
 	let s:searchdecl = a:method
-endfu
+endfunction
 
 " JDK1.1								{{{2
 fu! javacomplete#UseJDK11()
 	let s:isjdk11 = 1
-endfu
+endfunction
 
 " java compiler								{{{2
 fu! javacomplete#GetCompiler()
 	return exists('s:compiler') && s:compiler !~  '^\s*$' ? s:compiler : 'javac'
-endfu
+endfunction
 
 fu! javacomplete#SetCompiler(compiler)
 	let s:compiler = a:compiler
-endfu
+endfunction
 
 " jvm launcher								{{{2
 fu! javacomplete#GetJVMLauncher()
 	return exists('s:interpreter') && s:interpreter !~  '^\s*$' ? s:interpreter : 'java'
-endfu
+endfunction
 
 fu! javacomplete#SetJVMLauncher(interpreter)
 	if javacomplete#GetJVMLauncher() != a:interpreter
 		let s:cache = {}
 	endif
 	let s:interpreter = a:interpreter
-endfu
+endfunction
 
 " sourcepath								{{{2
 fu! javacomplete#AddSourcePath(s)
@@ -1652,7 +1663,7 @@ fu! javacomplete#AddSourcePath(s)
 	elseif index(s:sourcepath, path) == -1
 		call add(s:sourcepath, path)
 	endif
-endfu
+endfunction
 
 fu! javacomplete#DelSourcePath(s)
 	if !exists('s:sourcepath') || !isdirectory(a:s)| return   | endif
@@ -1660,7 +1671,7 @@ fu! javacomplete#DelSourcePath(s)
 	if idx != -1
 		call remove(s:sourcepath, idx)
 	endif
-endfu
+endfunction
 
 fu! javacomplete#SetSourcePath(s)
 	let paths = type(a:s) == type([]) ? a:s : split(a:s, javacomplete#GetClassPathSep())
@@ -1670,13 +1681,13 @@ fu! javacomplete#SetSourcePath(s)
 			call add(s:sourcepath, fnamemodify(path, ':p:h'))
 		endif
 	endfor
-endfu
+endfunction
 
 " return the sourcepath. Given argument, add current path or default package root path
 " NOTE: Avoid path duplicate, otherwise globpath() will return duplicate result.
 fu! javacomplete#GetSourcePath(...)
 	return join(s:GetSourceDirs(a:0 > 0 && a:1 ? expand('%:p') : ''), s:PATH_SEP)
-endfu
+endfunction
 
 fu! s:GetSourceDirs(filepath, ...)
 	let dirs = exists('s:sourcepath') ? s:sourcepath : []
@@ -1699,7 +1710,7 @@ fu! s:GetSourceDirs(filepath, ...)
 		endif
 	endif
 	return dirs
-endfu
+endfunction
 
 " classpath								{{{2
 fu! javacomplete#AddClassPath(s)
@@ -1714,7 +1725,7 @@ fu! javacomplete#AddClassPath(s)
 		call add(s:classpath, a:s)
 	endif
 	let s:cache = {}
-endfu
+endfunction
 
 fu! javacomplete#DelClassPath(s)
 	if !exists('s:classpath') | return   | endif
@@ -1722,7 +1733,7 @@ fu! javacomplete#DelClassPath(s)
 	if idx != -1
 		call remove(s:classpath, idx)
 	endif
-endfu
+endfunction
 
 fu! javacomplete#SetClassPath(s)
 	if type(a:s) == type("")
@@ -1731,15 +1742,15 @@ fu! javacomplete#SetClassPath(s)
 		let s:classpath = a:s
 	endif
 	let s:cache = {}
-endfu
+endfunction
 
 fu! javacomplete#GetClassPathSep()
 	return s:PATH_SEP
-endfu
+endfunction
 
 fu! javacomplete#GetClassPath()
 	return exists('s:classpath') ? join(s:classpath, javacomplete#GetClassPathSep()) : ''
-endfu
+endfunction
 
 " s:GetClassPath()							{{{2
 fu! s:GetClassPath()
@@ -1762,7 +1773,7 @@ fu! s:GetClassPath()
 	endif
 
 	return path . $CLASSPATH
-endfu
+endfunction
 
 fu! s:GetJavaCompleteClassPath()
 	" remove *.class from wildignore if it exists, so that globpath doesn't ignore Reflection.class
@@ -1797,7 +1808,7 @@ fu! s:GetJavaCompleteClassPath()
 	endif
 
 	return fnamemodify(classfile, ':p:h')
-endfu
+endfunction
 
 fu! s:GetClassPathOfJsp()
 	if exists('b:classpath_jsp')
@@ -1827,7 +1838,7 @@ fu! s:GetClassPathOfJsp()
 		endif
 	endwhile
 	return ''
-endfu
+endfunction
 
 " return only classpath which are directories
 fu! s:GetClassDirs()
@@ -1838,7 +1849,7 @@ fu! s:GetClassDirs()
 		endif
 	endfor
 	return dirs
-endfu
+endfunction
 
 " s:GetPackageName()							{{{2
 fu! s:GetPackageName()
@@ -1851,18 +1862,18 @@ fu! s:GetPackageName()
 
 	call cursor(lnum_old, col_old)
 	return packageName
-endfu
+endfunction
 
 fu! s:IsStatic(modifier)
 	return a:modifier[strlen(a:modifier)-4]
-endfu
+endfunction
 
 " utilities							{{{1
 " Convert a file name into the unique form.
 " Similar with fnamemodify(). NOTE that ':gs' should not be used.
 fu! s:fnamecanonize(fname, mods)
 	return fnamemodify(a:fname, a:mods . ':gs?[\\/]\+?/?')
-endfu
+endfunction
 
 " Similar with filter(), but returns a new list instead of operating in-place.
 " `item` has the value of the current item.
@@ -1884,7 +1895,7 @@ fu! s:filter(expr, string)
 		endfor
 		return result
 	endif
-endfu
+endfunction
 
 fu! s:Index(list, expr, key)
 	let i = 0
@@ -1895,7 +1906,7 @@ fu! s:Index(list, expr, key)
 		let i += 1
 	endwhile
 	return -1
-endfu
+endfunction
 
 fu! s:Match(list, expr, key)
 	let i = 0
@@ -1906,20 +1917,20 @@ fu! s:Match(list, expr, key)
 		let i += 1
 	endwhile
 	return -1
-endfu
+endfunction
 
 fu! s:KeepCursor(cmd)
 	let lnum_old = line('.')
 	let col_old = col('.')
 	exe a:cmd
 	call cursor(lnum_old, col_old)
-endfu
+endfunction
 
 fu! s:InCommentOrLiteral(line, col)
 	if has("syntax") && &ft != 'jsp'
 		return synIDattr(synID(a:line, a:col, 1), "name") =~? '\(Comment\|String\|Character\)'
 	endif
-endfu
+endfunction
 
 function! s:InComment(line, col)
 	if has("syntax") && &ft != 'jsp'
@@ -1957,16 +1968,16 @@ fu! s:RemoveBlockComments(str, ...)
 		let ie = match(result, '\*\/')
 	endwhile
 	return result
-endfu
+endfunction
 
 fu! s:Trim(str)
 	let str = substitute(a:str, '^\s*', '', '')
 	return substitute(str, '\s*$', '', '')
-endfu
+endfunction
 
 fu! s:SplitAt(str, index)
 	return [strpart(a:str, 0, a:index+1), strpart(a:str, a:index+1)]
-endfu
+endfunction
 
 " TODO: search pair used in string, like 
 " 	'create(ao.fox("("), new String).foo().'
@@ -2017,7 +2028,7 @@ fu! s:CountDims(str)
 		endwhile
 	endif
 	return dims
-endfu
+endfunction
 
 fu! s:GotoUpperBracket()
 	let searched = 0
@@ -2029,7 +2040,7 @@ fu! s:GotoUpperBracket()
 			let searched = 1
 		endif
 	endwhile
-endfu
+endfunction
 
 " Improve recognition of variable declaration using my version of searchdecl() for accuracy reason.
 " TODO:
@@ -2089,23 +2100,23 @@ fu! s:Searchdecl(name, ...)
 		endwhile
 	endif
 	return 1
-endfu
+endfunction
 "nmap <F8> :call <SID>Searchdecl(expand('<cword>'))<CR>
 
 fu! javacomplete#Exe(cmd)
 	exe a:cmd
-endfu
+endfunction
 
 " cache utilities							{{{1
 
 " key of s:files for current buffer. It may be the full path of current file or the bufnr of unnamed buffer, and is updated when BufEnter, BufLeave.
 fu! s:GetCurrentFileKey()
 	return has("autocmd") ? s:curfilekey : empty(expand('%')) ? bufnr('%') : expand('%:p')
-endfu
+endfunction
 
 fu! s:SetCurrentFileKey()
 	let s:curfilekey = empty(expand('%')) ? bufnr('%') : expand('%:p')
-endfu
+endfunction
 
 call s:SetCurrentFileKey()
 if has("autocmd")
@@ -2117,7 +2128,7 @@ endif
 " Log utilities								{{{1
 fu! s:WatchVariant(variant)
 	"echoerr a:variant
-endfu
+endfunction
 
 " level
 " 	5	off/fatal 
@@ -2128,27 +2139,27 @@ endfu
 " 	0	trace
 fu! javacomplete#SetLogLevel(level)
 	let s:loglevel = a:level
-endfu
+endfunction
 
 fu! javacomplete#GetLogLevel()
 	return exists('s:loglevel') ? s:loglevel : 3
-endfu
+endfunction
 
 fu! javacomplete#GetLogContent()
 	return s:log
-endfu
+endfunction
 
 fu! s:Trace(msg)
 	call s:Log(0, a:msg)
-endfu
+endfunction
 
 fu! s:Debug(msg)
 	call s:Log(1, a:msg)
-endfu
+endfunction
 
 fu! s:Info(msg)
 	call s:Log(2, a:msg)
-endfu
+endfunction
 
 fu! s:Log(level, key, ...)
 	if a:level >= javacomplete#GetLogLevel()
@@ -2158,7 +2169,7 @@ fu! s:Log(level, key, ...)
 		let s:logline = s:timestamp . " [" . a:level . "] " . a:key . " " . join(a:000, " ")
 		call writefile([ s:logline ], s:logFilepath, "a")
 	endif
-endfu
+endfunction
 
 fu! s:System(cmd, caller)
 	call s:WatchVariant(a:cmd)
@@ -2166,13 +2177,13 @@ fu! s:System(cmd, caller)
 	let res = system(a:cmd)
 	call s:Debug(reltimestr(reltime(t)) . 's to exec "' . a:cmd . '" by ' . a:caller)
 	return res
-endfu
+endfunction
 
 " functions to get information						{{{1
 " utilities								{{{2
 fu! s:MemberCompare(m1, m2)
 	return a:m1['n'] == a:m2['n'] ? 0 : a:m1['n'] > a:m2['n'] ? 1 : -1
-endfu
+endfunction
 
 fu! s:Sort(ci)
 	let ci = a:ci
@@ -2183,7 +2194,7 @@ fu! s:Sort(ci)
 		call sort(ci['methods'], 's:MemberCompare')
 	endif
 	return ci
-endfu
+endfunction
 
 " Function to run Reflection						{{{2
 fu! s:RunReflection(option, args, log)
@@ -2194,7 +2205,7 @@ fu! s:RunReflection(option, args, log)
 
 	let cmd = javacomplete#GetJVMLauncher() . classpath . ' Reflection ' . a:option . ' "' . a:args . '"'
 	return s:System(cmd, a:log)
-endfu
+endfunction
 " class information							{{{2
 
 
@@ -2498,7 +2509,7 @@ fu! s:DoGetClassInfo(class, ...)
 
 	call s:Trace('[s:DoGetClassInfo] ... KO, returning empty')
 	return {}
-endfu
+endfunction
 
 " Rules of overriding and hiding:
 " 1. Fields cannot be overridden; they can only be hidden.
@@ -2531,7 +2542,7 @@ endfu
 "    endif
 "  endfor
 "  return a:ci
-"endfu
+"endfunction
 
 
 " Parameters:
@@ -2589,7 +2600,7 @@ fu! s:GetClassInfoFromSource(class, filename)
 	endif
 	call s:Trace('[s:GetClassInfoFromSource] ... OK, returning ' . string(ci))
 	return ci
-endfu
+endfunction
 
 fu! s:Tree2ClassInfo(t)
 	let t = a:t
@@ -2631,7 +2642,7 @@ fu! s:Tree2ClassInfo(t)
 	endif
 
 	return t
-endfu
+endfunction
 
 "fu! s:AddInheritedClassInfo(ci, t, ...)
 "  let ci = a:ci
@@ -2654,7 +2665,7 @@ endfu
 "    let ci = s:MergeClassInfo(ci, s:DoGetClassInfo(id, filepath, packagename), a:0 > 0 && a:1)
 "  endfor
 "  return ci
-"endfu
+"endfunction
 
 " To obtain information of the class in current file or current folder, or
 " even in current project.
@@ -2734,7 +2745,7 @@ function! s:DoGetClassInfoFromTags(class)
 	endfor
 	call s:Trace('[s:DoGetClassInfoFromTags] ... OK, returning ' . string(ci))
 	return ci
-endfu
+endfunction
 
 " package information							{{{2
 
@@ -2761,7 +2772,7 @@ fu! s:DoGetInfoByReflection(class, option)
 	endif
 
 	return get(s:cache, a:class, {})
-endfu
+endfunction
 
 " search in members							{{{2
 " TODO: what about default access?
@@ -2776,7 +2787,7 @@ fu! s:CanAccess(mods, kind)
 				\	|| (a:mods[-2:-2] && a:kind == 1))
 	call s:Trace('[s:CanAccess] ... returning: ' . ret)
 	return ret
-endfu
+endfunction
 
 fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
 	call s:Trace('[s:SearchMember] Searching members: ci = ' . string(a:ci) . ', name = ' . a:name . ', fullmatch = ' . a:fullmatch . ', kind = ' . a:kind . ', returnAll = ' . a:returnAll . ', memberkind = ' . a:memberkind . ' ...')
@@ -2833,7 +2844,7 @@ fu! s:SearchMember(ci, name, fullmatch, kind, returnAll, memberkind, ...)
 	endif
 	call s:Trace('[s:SearchMember] ... OK, returning ' . string(result))
 	return result
-endfu
+endfunction
 
 
 " generate member list							{{{2
@@ -2844,7 +2855,7 @@ fu! s:DoGetFieldList(fields)
 		let s .= "{'kind':'" . (s:IsStatic(field.m) ? "F" : "f") . "','word':'" . field.n . "','menu':'" . field.t . "','dup':1},"
 	endfor
 	return s
-endfu
+endfunction
 
 fu! s:DoGetMethodList(methods, ...)
 	call s:Trace('[s:DoGetMethodList] Retrieving method list from ' . string(a:methods) . ' (additional params: ' . join(a:000, ', ') . ')')
@@ -2856,7 +2867,7 @@ fu! s:DoGetMethodList(methods, ...)
 	endfor
 	call s:Trace('[s:DoGetMethodList] ... OK, returning ' . s)
 	return s
-endfu
+endfunction
 
 " kind:
 "	0 - for instance, 1 - this, 2 - super, 3 - class, 4 - array, 5 - method result, 6 - primitive type
@@ -2924,7 +2935,7 @@ fu! s:DoGetMemberList(ci, kind)
 	let ret = eval('[' . s . ']')
 	call s:Trace('[s:DoGetMemberList] ... OK, returning [' . join(ret, ', ') . ']')
 	return ret
-endfu
+endfunction
 
 " interface							{{{2
 
@@ -2938,7 +2949,7 @@ endfunction
 
 fu! s:GetStaticMemberList(class)
 	return s:DoGetMemberList(s:DoGetClassInfo(a:class), 11)
-endfu
+endfunction
 
 function! s:GetConstructorList(class)
 	let ci = s:DoGetClassInfo(a:class)
@@ -2989,7 +3000,7 @@ fu! s:GetMembers(fqn, ...)
 	endif
 
 	return list
-endfu
+endfunction
 
 " a:1		incomplete mode
 " return packages in classes directories or source pathes
@@ -3021,7 +3032,7 @@ fu! s:DoGetPackageInfoInDirs(package, onlyPackages, ...)
 		endfor
 	endfor
 	return list
-endfu
+endfunction
 " }}}
 "}}}
 " vim:set fdm=marker sw=4 ts=4 noexpandtab nowrap:
