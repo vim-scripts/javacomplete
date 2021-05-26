@@ -10,4 +10,7 @@ before_install:
   - vvm use vimorg--v8.1.2269 --install --with-features=huge
   -
   - rvm use 2.5.0 --install --binary --fuzzy
-script: rake ci
+script:
+script: 
+  - rake ci
+  - jdk_switcher use openjdk8
