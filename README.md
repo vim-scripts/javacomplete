@@ -43,7 +43,7 @@ existed
 
 It recognize nearly all kinds of Primary Expressions (see langspec-3.0)
 except for "Primary.new Indentifier". Casting conversion is also supported.
-Samples of input contexts are as following:	('|' indicates cursor)
+Samples of input contexts are as following:	(<kbd>|</kbd> indicates cursor)
 
 
 ### after '.', list members of a class or a package
