@@ -1,5 +1,17 @@
+source t/helpers/setup.vim
+
 describe '<Plug>(javacomplete)'
-	it 'returns a floor for a positive number'
-		Expect 1 == 1
+	before
+		new
+		setfiletype java
+	end
+
+	after
+		close!
+	end
+
+	it 'variable name'
+		call PasteSourceCode('VariableName')
+		Expect getline(1) == 'package javacompletetestproject;'
 	end
 end
