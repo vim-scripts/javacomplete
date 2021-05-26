@@ -48,27 +48,27 @@ Samples of input contexts are as following:	(<kbd>|</kbd> indicates cursor)
 
 ### after `.`, list members of a class or a package
 
-  * `package.`<kbd>|</kbd>         subpackages and classes of a package
-  * `Type.`<kbd>|</kbd>                static members of the 'Type' class and "class"
-  * `var.`<kbd>|</kbd> or `field.`<kbd>|</kbd>     members of a variable or a field
-  * `method().`<kbd>|</kbd>         members of result of method()
-  * `this.`<kbd>|</kbd>                   members of the current class
-  * `ClassName.this.`<kbd>|</kbd>  members of the qualified class
-  * `super.`<kbd>|</kbd>               members of the super class
-  * `array.`<kbd>|</kbd>                members of an array object
-  * `array[i].`<kbd>|</kbd>             array access, return members of the element of array
-  * `"String".`<kbd>|</kbd>            String literal, return members of java.lang.String
-  * `int.`<kbd>|</kbd> or `void.`<kbd>|</kbd>       primitive type or pseudo-type, return "class"
-  * `int[].`<kbd>|</kbd>                   array type, return members of a array type and "class"
+  * `package.`<kbd>|</kbd>                     subpackages and classes of a package [![TEST](https://img.shields.io/badge/x-TEST-brightgreen)](#)
+  * `Type.`<kbd>|</kbd>                        static members of the 'Type' class and "class"
+  * `var.`<kbd>|</kbd> or `field.`<kbd>|</kbd> members of a variable or a field
+  * `method().`<kbd>|</kbd>                    members of result of method()
+  * `this.`<kbd>|</kbd>                        members of the current class
+  * `ClassName.this.`<kbd>|</kbd>              members of the qualified class
+  * `super.`<kbd>|</kbd>                       members of the super class
+  * `array.`<kbd>|</kbd>                       members of an array object
+  * `array[i].`<kbd>|</kbd>                    array access, return members of the element of array
+  * `"String".`<kbd>|</kbd>                    String literal, return members of java.lang.String
+  * `int.`<kbd>|</kbd> or `void.`<kbd>|</kbd>  primitive type or pseudo-type, return "class"
+  * `int[].`<kbd>|</kbd>                       array type, return members of a array type and "class"
   * `java.lang.String[].`<kbd>|</kbd>
-  * `new int[].`<kbd>|</kbd>           members of the new array instance
+  * `new int[].`<kbd>|</kbd>                   members of the new array instance
   * `new java.lang.String[i=1][].`<kbd>|</kbd>
-  * `new Type().`<kbd>|</kbd>      members of the new class instance 
-  * `Type.class.`<kbd>|</kbd>      class literal, return members of java.lang.Class
+  * `new Type().`<kbd>|</kbd>                  members of the new class instance 
+  * `Type.class.`<kbd>|</kbd>                  class literal, return members of java.lang.Class
   * `void.class.`<kbd>|</kbd> or `int.class.`<kbd>|</kbd>
-  * `((Type)var).`<kbd>|</kbd>         cast var as Type, return members of Type.
-  * `(var.method()).`<kbd>|</kbd>   same with `var.`<kbd>|</kbd>"
-  * `(new Class()).`<kbd>|</kbd>    same with `new Class().`<kbd>|</kbd>"
+  * `((Type)var).`<kbd>|</kbd>                 cast var as Type, return members of Type.
+  * `(var.method()).`<kbd>|</kbd>              same with `var.`<kbd>|</kbd>"
+  * `(new Class()).`<kbd>|</kbd>               same with `new Class().`<kbd>|</kbd>"
 
 
 ### after `(`, list matching methods with parameters information.
