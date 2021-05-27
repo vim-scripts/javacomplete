@@ -11,7 +11,14 @@
 
 import java.lang.reflect.*;
 import java.io.*;
+import java.net.URI;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.zip.*;
 
 class Reflection {
@@ -148,7 +155,9 @@ class Reflection {
         String extdirs = System.getProperty("java.ext.dirs");
         if (extdirs != null) {
             for (StringTokenizer st = new StringTokenizer(extdirs, File.pathSeparator); st.hasMoreTokens(); ) {
-                addClasspathesFromDir(st.nextToken() + File.separator);
+                String dir = st.nextToken();
+                System.err.println("adding dir: " + dir);
+                addClasspathesFromDir(dir + File.separator);
             }
         }
 
@@ -166,6 +175,7 @@ class Reflection {
             }
         }
 
+        System.err.println("htClasspath: " + htClasspath);
         return htClasspath;
     }
 
@@ -178,9 +188,13 @@ class Reflection {
                 if (!f.exists()) continue;
 
                 if (items[i].endsWith(".jar") || items[i].endsWith(".zip") || items[i].endsWith(".ZIP")) {
+                    System.err.println("Adding " + f.toString());
                     htClasspath.put(f.toString(), "");
                 } else if (items.equals("classes")) {
-                    if (f.isDirectory()) htClasspath.put(f.toString(), "");
+                    if (f.isDirectory()) {
+                        System.err.println("Adding directory " + f.toString());
+                        htClasspath.put(f.toString(), "");
+                    }
                 }
             }
         }
@@ -191,13 +205,26 @@ class Reflection {
      * If name is empty, put all loadable package info into map once.
      */
     private static void putPackageInfo(Hashtable map, String name) {
+        System.err.println("[putPackageInfo] putting package info from " + map + " and name " + name + " ...");
         String prefix = name.replace('.', '/') + "/";
+        System.err.println("prefix: " + prefix);
         Hashtable subpackages = new Hashtable();
         Hashtable classes = new Hashtable();
-        for (Enumeration e = collectClassPath().keys(); e.hasMoreElements(); ) {
-            String path = (String) e.nextElement();
-            if (path.endsWith(".jar") || path.endsWith(".zip")) appendListFromJar(subpackages, classes, path, prefix);
-            else appendListFromFolder(subpackages, classes, path, prefix);
+        if (jdkVersion() < 9) {
+            for (Enumeration e = collectClassPath().keys(); e.hasMoreElements(); ) {
+                String path = (String) e.nextElement();
+                if (path.endsWith(".jar") || path.endsWith(".zip")) appendListFromJar(subpackages, classes, path, prefix);
+                else appendListFromFolder(subpackages, classes, path, prefix);
+            }
+        } else {
+            final String start = prefix.substring(0, prefix.length() -1) + '.';
+            try {
+                List<String> sorted = findJavaPackagesStartingWith(start);
+                System.err.println("collected: " + sorted);
+                sorted.forEach(it -> subpackages.put(it, ""));
+            } catch (IOException ignore) {
+                throw new RuntimeException("Unable to retrieve subpackages of '" + start + "'");
+            }
         }
 
         if (subpackages.size() > 0 || classes.size() > 0) {
@@ -215,9 +242,11 @@ class Reflection {
                     .append("',");
             }
             sb.append("]}");
+            System.err.println("Adding: " + name + " = " + sb.toString());
             map.put(name, sb.toString());
         }
     }
+
 
     public static void appendListFromJar(Hashtable subpackages, Hashtable classes, String path, String prefix) {
         try {
@@ -229,9 +258,15 @@ class Reflection {
                     int splitPos = entry.indexOf('/', prefix.length());
                     String shortname = entry.substring(prefix.length(), splitPos == -1 ? entry.length() - 6 : splitPos);
                     if (splitPos == -1) {
-                        if (!classes.containsKey(shortname)) classes.put(shortname, ""); //classes.put(shortname, "{'tag':'CLASSDEF','name':'"+shortname+"'}");
+                        if (!classes.containsKey(shortname)) {
+                            System.err.println("Adding class: " + shortname);
+                            classes.put(shortname, ""); //classes.put(shortname, "{'tag':'CLASSDEF','name':'"+shortname+"'}");
+                        }
                     } else {
-                        if (!subpackages.containsKey(shortname)) subpackages.put(shortname, ""); //subpackages.put(shortname, "{'tag':'PACKAGE','name':'" +shortname+"'}");
+                        if (!subpackages.containsKey(shortname)) {
+                            System.err.println("Adding subpackage: " + shortname);
+                            subpackages.put(shortname, ""); //subpackages.put(shortname, "{'tag':'PACKAGE','name':'" +shortname+"'}");
+                        }
                     }
                 }
             }
@@ -266,6 +301,7 @@ class Reflection {
 
     // generate information of all packages in jar files.
     public static String getPackageList() {
+        System.err.println("[getPackageList] START");
         Hashtable map = new Hashtable();
 
         for (Enumeration e = collectClassPath().keys(); e.hasMoreElements(); ) {
@@ -684,6 +720,8 @@ class Reflection {
     }
 
     public static void main(String[] args) {
+        System.err.println("java.ext.dirs ..: " + System.getProperty("java.ext.dirs"));
+        System.err.println("props ..........: " + System.getProperties());
         String className = null;
         int option = 0x0;
         boolean wholeClassInfo = false;
@@ -753,5 +791,40 @@ class Reflection {
         else if (checkExistedAndRead) output(existedAndRead(className));
         else if (checkExisted) output(String.valueOf(existed(className)));
         else if (listPackageContent) output(getPackageList(className));
+    }
+
+    /**
+     * Returns packages starting with the specific text.
+     *
+     * @param start a text
+     * @return list of packages sorted
+     * @throws IOException
+     */
+    static List<String> findJavaPackagesStartingWith(String start) throws IOException {
+        Path p = Paths.get(URI.create("jrt:/")).resolve("/packages");
+        List<String> sorted = Files.list(p)
+            .map(it -> it.subpath(1, it.getNameCount())
+                .toString())
+            .filter(it -> it.startsWith(start))
+            .map(it -> it.substring(start.length()))
+            .map(it -> {
+                int idx = it.indexOf('.');
+                return (idx < 0) ? it : it.substring(0, idx);
+            })
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+        return sorted;
+    }
+
+    static int jdkVersion() {
+        return jdkVersion(System.getProperty("java.specification.version"));
+    }
+
+    static int jdkVersion(String text) {
+        int idx = text.indexOf('.');
+        if (idx < 0)
+            return Integer.parseInt(text);
+        return Integer.parseInt(text.substring(idx +1));
     }
 }

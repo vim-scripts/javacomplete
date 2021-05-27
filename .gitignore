@@ -3,4 +3,5 @@ Gemfile.lock
 VimFlavor.lock
 
 *.swp
+*.log
 ./*.java
