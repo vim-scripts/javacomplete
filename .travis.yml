@@ -13,4 +13,3 @@ before_install:
 script:
 script: 
   - rake ci
-  - jdk_switcher use openjdk8
