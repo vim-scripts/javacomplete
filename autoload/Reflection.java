@@ -15,6 +15,7 @@ import java.net.URI;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -206,24 +207,30 @@ class Reflection {
      */
     private static void putPackageInfo(Hashtable map, String name) {
         System.err.println("[putPackageInfo] putting package info from " + map + " and name " + name + " ...");
-        String prefix = name.replace('.', '/') + "/";
-        System.err.println("prefix: " + prefix);
         Hashtable subpackages = new Hashtable();
         Hashtable classes = new Hashtable();
         if (jdkVersion() < 9) {
+            String prefix = name.replace('.', '/') + "/";
+            System.err.println("prefix: " + prefix);
             for (Enumeration e = collectClassPath().keys(); e.hasMoreElements(); ) {
                 String path = (String) e.nextElement();
                 if (path.endsWith(".jar") || path.endsWith(".zip")) appendListFromJar(subpackages, classes, path, prefix);
                 else appendListFromFolder(subpackages, classes, path, prefix);
             }
         } else {
-            final String start = prefix.substring(0, prefix.length() -1) + '.';
+            final String start = name + '.';
+            System.err.println("start: " + start);
             try {
-                List<String> sorted = findJavaPackagesStartingWith(start);
+                List<String> sorted = findPackagesUnder(start);
                 System.err.println("collected: " + sorted);
                 sorted.forEach(it -> subpackages.put(it, ""));
-            } catch (IOException ignore) {
-                throw new RuntimeException("Unable to retrieve subpackages of '" + start + "'");
+
+                List<String> clazzes = findClassesUnder(name);
+                clazzes.forEach(it -> classes.put(it, ""));
+            } catch (NoSuchFileException e) {
+                // it's ok
+            } catch (IOException e) {
+                throw new RuntimeException("Unable to retrieve subpackages of '" + start + "'", e);
             }
         }
 
@@ -794,19 +801,27 @@ class Reflection {
     }
 
     /**
-     * Returns packages starting with the specific text.
+     * Returns packages under specific one.
      *
-     * @param start a text
-     * @return list of packages sorted
+     * @param packageName a package name
+     * @return list of packages
      * @throws IOException
      */
-    static List<String> findJavaPackagesStartingWith(String start) throws IOException {
+    static List<String> findPackagesUnder(String packageName) throws IOException {
+
+        Path px = Paths.get(URI.create("jrt:/")).resolve("/modules");
+        Files.list(px)
+            .forEach(it -> System.err.println(it));
+
         Path p = Paths.get(URI.create("jrt:/")).resolve("/packages");
+        Files.list(p)
+            .forEach(it -> System.err.println(it));
+
         List<String> sorted = Files.list(p)
             .map(it -> it.subpath(1, it.getNameCount())
                 .toString())
-            .filter(it -> it.startsWith(start))
-            .map(it -> it.substring(start.length()))
+            .filter(it -> it.startsWith(packageName))
+            .map(it -> it.substring(packageName.length()))
             .map(it -> {
                 int idx = it.indexOf('.');
                 return (idx < 0) ? it : it.substring(0, idx);
@@ -814,6 +829,26 @@ class Reflection {
             .distinct()
             .sorted()
             .collect(Collectors.toList());
+        return sorted;
+    }
+
+    static List<String> findClassesUnder(String packageName) throws IOException {
+        FileSystem fs = FileSystems.getFileSystem(URI.create("jrt:/"));
+        Path p = fs.getPath("modules", "java.base", packageName.replace('.', '/'));
+        Set<String> tmp = Files.list(p)
+            .map(it -> it.toString())
+            .map(it -> it.substring(it.lastIndexOf('/') + 1))
+            .filter(it -> Character.isUpperCase(it.charAt(0)))
+            .map(it -> it.substring(0, it.indexOf('.')))
+            .map(it -> {
+                int idx = it.indexOf('$');
+                if (idx < 0) return it;
+                return it.substring(0, idx);
+            })
+            .collect(Collectors.toSet());
+
+        List<String> sorted = new ArrayList<>(tmp);
+        Collections.sort(sorted);
         return sorted;
     }
 
