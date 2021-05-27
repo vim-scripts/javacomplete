@@ -145,10 +145,11 @@ class Reflection {
             addClasspathesFromDir(System.getProperty("java.home") + File.separator + ".." + File.separator + "Classes" + File.separator);
         }
 
-        // ext
         String extdirs = System.getProperty("java.ext.dirs");
-        for (StringTokenizer st = new StringTokenizer(extdirs, File.pathSeparator); st.hasMoreTokens(); ) {
-            addClasspathesFromDir(st.nextToken() + File.separator);
+        if (extdirs != null) {
+            for (StringTokenizer st = new StringTokenizer(extdirs, File.pathSeparator); st.hasMoreTokens(); ) {
+                addClasspathesFromDir(st.nextToken() + File.separator);
+            }
         }
 
         // user classpath
